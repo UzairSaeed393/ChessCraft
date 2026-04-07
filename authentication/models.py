@@ -1,11 +1,16 @@
 from django.db import models
-from django.contrib.auth.models import User
+# from django.contrib.auth.models import User
 import random
 from django.utils import timezone
 from datetime import timedelta
+from user.models import User
+from django.conf import settings
 
 class UserOTP(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL, 
+        on_delete=models.CASCADE
+    )
     otp_code = models.CharField(max_length=6)
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField(null=True)
