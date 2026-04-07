@@ -65,8 +65,16 @@
 }
 
 .info-text {
-    color: var(var(--darktext));
+    color: var(--darktext);
     font-family: 'Roboto', sans-serif;
+}
+
+@media (max-width: 420px) {
+    .formsection,
+    .infosection {
+        width: 92vw;
+        margin: 12px;
+    }
 }
 
 /* Hover effect for whole item */

@@ -34,9 +34,9 @@
         </div>
         <div class="nav-links desktop-nav">
             <a href="/">Home</a>
-            <a href="/exercises/">Games</a>
-            <a href="/meals/">Analysis</a>
-            <a href="/meals/fooditems/">Insights</a>
+            <a href="{% url 'game' %}">Games</a>
+            <a href="/analysis/">Analysis</a>
+            <a href="/insights/">Insights</a>
             <a href="/about/">About</a>
             <a href="/contact/">Contact</a>
         </div>
@@ -44,7 +44,7 @@
         <!-- AUTH BUTTONS -->
         <div class="auth-buttons">
             {% if user.is_authenticated %}
-            <a href="/users/profile/" class="username-link">
+            <a href="{% url 'profile' %}" class="username-link">
                 <i class="bi bi-person-circle me-1"></i> {{ user.username }}
             </a>
             <a href="/auth/logout/" class="logout-btn">Logout</a>
@@ -61,9 +61,9 @@
         <div class="close-btn" id="closeSidebar">&times;</div>
         <div class="nav-links mobile-nav">
             <a href="/">Home</a>
-            <a href="/exercises/">Games</a>
-            <a href="/meals/">Analysis</a>
-            <a href="/meals/fooditems/">Insights</a>
+            <a href="{% url 'game' %}">Games</a>
+            <a href="/analysis/">Analysis</a>
+            <a href="/insights/">Insights</a>
             <a href="/about/">About</a>
             <a href="/contact/">Contact</a>
         </div>
@@ -115,7 +115,7 @@
                 <div class="col-md-3">
                     <h5 class="fw-bold mb-3">Quick Links</h5>
                     <ul class="list-unstyled">
-                        <li><a href="/games/" class="text-white text-decoration-none">Games</a></li>
+                        <li><a href="{% url 'game' %}" class="text-white text-decoration-none">Games</a></li>
                         <li><a href="/analysis/" class="text-white text-decoration-none">Analysis</a></li>
                         <li><a href="/insights/" class="text-white text-decoration-none">Insights</a></li>
                     </ul>

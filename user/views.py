@@ -1,5 +1,104 @@
-from django.shortcuts import render
+from django.shortcuts import render, redirect
+from django.contrib.auth.decorators import login_required
+from django.contrib import messages
+from django.contrib.auth import get_user_model
+from django.db import IntegrityError
+from django.core.paginator import Paginator
+from .utils import fetch_and_save_games
+from .models import Game
 
-# Create your views here.
+
+@login_required
+def profile_view(request):
+    if request.method == 'POST':
+        action = (request.POST.get('action') or '').strip()
+
+        if action == 'delete_all_games':
+            deleted_count, _ = Game.objects.filter(user=request.user).delete()
+            messages.success(request, f"Removed {deleted_count} game(s).")
+            return redirect('profile')
+
+        if action == 'delete_games_for_username':
+            chess_username = (request.POST.get('chess_username') or '').strip()
+            if not chess_username:
+                messages.error(request, 'Please select a Chess.com username.')
+                return redirect('profile')
+
+            deleted_count, _ = Game.objects.filter(
+                user=request.user,
+                chess_username_at_time__iexact=chess_username,
+            ).delete()
+            messages.success(request, f"Removed {deleted_count} game(s) for {chess_username}.")
+            return redirect('profile')
+
+        messages.error(request, 'Invalid action.')
+        return redirect('profile')
+
+    chess_usernames = (
+        Game.objects.filter(user=request.user)
+        .order_by('chess_username_at_time')
+        .values_list('chess_username_at_time', flat=True)
+        .distinct()
+    )
+
+    total_games = Game.objects.filter(user=request.user).count()
+
+    return render(
+        request,
+        'user/profile.html',
+        {
+            'chess_usernames': list(chess_usernames),
+            'total_games': total_games,
+        },
+    )
+
+@login_required
 def game_view(request):
-    return render(request, 'main/game.html')
+    if request.method == "POST":
+        # 1. Capture data from the form
+        chess_username = (request.POST.get('chess_username') or '').strip()
+        date_range = request.POST.get('range', 'month') # Default to month if none selected
+        
+        # 2. Update user profile if the username is provided/changed
+        if chess_username and request.user.chess_username != chess_username:
+            User = get_user_model()
+            if User.objects.exclude(pk=request.user.pk).filter(chess_username__iexact=chess_username).exists():
+                messages.error(request, "That Chess.com username is already linked to another account.")
+                return redirect('game')
+
+            request.user.chess_username = chess_username
+            try:
+                request.user.save()
+            except IntegrityError:
+                messages.error(request, "Could not save Chess.com username (it may already be in use).")
+                return redirect('game')
+
+        if not chess_username:
+            messages.error(request, "Please enter a Chess.com username to fetch games.")
+            return redirect('game')
+
+        # 3. Trigger the logic (we pass request.user so games are linked to THEM)
+        success = fetch_and_save_games(request.user, chess_username, date_range)
+        
+        if success:
+            messages.success(request, f"Successfully fetched your {date_range}ly games!")
+        else:
+            messages.error(request, "Could not fetch games. Please verify the username and try again.")
+        
+        return redirect('game')
+
+    # GET request: Paginate games belonging to this user, newest first
+    games_qs = Game.objects.filter(user=request.user).order_by('-date_played')
+    paginator = Paginator(games_qs, 50)
+    page_obj = paginator.get_page(request.GET.get('page'))
+
+    return render(
+        request,
+        'user/game.html',
+        {
+            'games': page_obj.object_list,
+            'page_obj': page_obj,
+            'paginator': paginator,
+            'total_games': games_qs.count(),
+        },
+    )

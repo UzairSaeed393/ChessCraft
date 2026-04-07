@@ -15,7 +15,7 @@ class Game(models.Model):
     # Link to our Custom User
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="games")
     chess_username_at_time = models.CharField(max_length=100)
-    game_id = models.CharField(max_length=255, unique=True)
+    game_id = models.CharField(max_length=255)
     accuracy = models.FloatField(blank=True, null=True)
     date_played = models.DateTimeField(blank=True, null=True)
     white_player = models.CharField(max_length=100)
@@ -25,9 +25,17 @@ class Game(models.Model):
     opening = models.CharField(max_length=255, blank=True, null=True)
     pgn = models.TextField(blank=True, null=True)
     is_analyzed = models.BooleanField(default=False)
+    white_rating = models.IntegerField(blank=True, null=True)
+    black_rating = models.IntegerField(blank=True, null=True)
+    
 
     class Meta:
         ordering = ['-date_played'] 
 
+        constraints = [
+            models.UniqueConstraint(fields=['user', 'game_id'], name='unique_user_game_id'),
+        ]
+
     def __str__(self):
-        return f"{self.white_player} vs {self.black_player} ({self.date_played.date()})"
+        date_part = self.date_played.date() if self.date_played else 'Unknown date'
+        return f"{self.white_player} vs {self.black_player} ({date_part})"

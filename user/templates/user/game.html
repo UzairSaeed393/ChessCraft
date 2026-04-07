@@ -1,15 +1,107 @@
 {% extends 'base.html' %}
-{% load static %}
+{% load static game_extras %}
 
-{% block title %}Games{% endblock %}
+{% block title %}Game Library - ChessCraft{% endblock %}
 
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/game.css' %}">
 {% endblock %}
 
 {% block content %}
-<div class="game-page">
-    
+<div class="dashboard-wrapper">
+    <section class="fetch-section">
+        <div class="control-card">
+            <h3>Fetch History</h3>
+            <p class="subtitle">Sync your games from Chess.com</p>
+            
+            <form action="{% url 'game' %}" method="POST" id="fetchForm">
+                {% csrf_token %}
+                <div class="fetch-form-row">
+                    <div class="form-group">
+                        <label for="chess_username">Chess.com Username</label>
+                        <input type="text" name="chess_username" id="chess_username" 
+                               value="{{ user.chess_username|default:'' }}" 
+                               placeholder="Enter username..." required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="range">Time Period</label>
+                        <select name="range" id="range">
+                            <option value="week">Last 7 Days</option>
+                            <option value="month" selected>Last 30 Days</option>
+                            <option value="year">Last Year</option>
+                        </select>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn-fetch" id="fetchBtn">
+                    <span class="btn-text">Sync Games</span>
+                    <div class="loader" id="loader"></div>
+                </button>
+            </form>
+        </div>
+    </section>
+
+    <section class="games-section">
+        <header class="main-header">
+            <h2 style="font-family: var(--font1);">Game Library</h2>
+            <span class="game-count">{{ total_games }} Games Loaded</span>
+        </header>
+
+        <div class="games-grid">
+            {% for game in games %}
+            <div class="game-card {{ game.result|lower }}">
+                <div class="card-header">
+                    <span class="time-control"><i class="bi bi-clock"></i> {{ game.time_control|time_control_label }}{% with cat=game.time_control|time_control_category icon=game.time_control|time_control_icon %}{% if cat %} <span class="tc-type">{% if icon %}<i class="bi {{ icon }}"></i>{% endif %} {{ cat }}</span>{% endif %}{% endwith %}</span>
+                    <span class="game-date">{{ game.date_played|date:"d M Y" }}</span>
+                </div>
+
+                <div class="match-up" style="font-family: var(--font2);">
+                    <div class="player white">
+                        <span class="name">{{ game.white_player }}</span>
+                        <span class="rating">{{ game.white_rating }}</span>
+                    </div>
+                    <div class="vs-circle">VS</div>
+                    <div class="player black">
+                        <span class="name">{{ game.black_player }}</span>
+                        <span class="rating">{{ game.black_rating }}</span>
+                    </div>
+                </div>
+
+                <div class="card-footer">
+                    <div class="outcome">
+                        <span class="result-text">{{ game.result }}</span>
+                    </div>
+                    <button class="btn-analyze">Analyze Game</button>
+                </div>
+            </div>
+            {% empty %}
+            <div class="empty-state">
+                <i class="bi bi-controller"></i>
+                <h3 style="font-family: var(--font1);">No games found</h3>
+                <p>Enter your username and click "Sync Games" to build your library.</p>
+            </div>
+            {% endfor %}
+        </div>
+
+        {% if page_obj and page_obj.paginator.num_pages > 1 %}
+        <div class="pagination-bar">
+            {% if page_obj.has_previous %}
+            <a class="page-btn" href="?page={{ page_obj.previous_page_number }}">Prev</a>
+            {% else %}
+            <span class="page-btn disabled">Prev</span>
+            {% endif %}
+
+            <span class="page-meta">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+
+            {% if page_obj.has_next %}
+            <a class="page-btn" href="?page={{ page_obj.next_page_number }}">Next</a>
+            {% else %}
+            <span class="page-btn disabled">Next</span>
+            {% endif %}
+        </div>
+        {% endif %}
+    </section>
 </div>
 {% endblock %}
 

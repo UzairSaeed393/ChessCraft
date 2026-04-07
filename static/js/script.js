@@ -8,6 +8,21 @@
     }
 
     ready(function () {
+        // Auto-dismiss flash messages
+        const alerts = document.querySelectorAll('.alert.auto-dismiss');
+        if (alerts && alerts.length) {
+            window.setTimeout(function () {
+                alerts.forEach(function (el) {
+                    if (!el || !el.isConnected) return;
+                    el.style.transition = 'opacity 0.45s ease';
+                    el.style.opacity = '0';
+                    window.setTimeout(function () {
+                        if (el.isConnected) el.remove();
+                    }, 500);
+                });
+            }, 5000);
+        }
+
         const menuToggle = document.getElementById("menuToggle");
         const sidebar = document.getElementById("sidebar");
         const closeSidebar = document.getElementById("closeSidebar");

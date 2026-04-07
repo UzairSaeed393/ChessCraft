@@ -2,5 +2,50 @@
 *.pyc
 __pycache__/
 db.sqlite3
+.sqlite3-journal
+*.sqlite3-journal
+*.sqlite3-wal
+*.sqlite3-shm
 .env
+.env.*
 media/
+
+# --- Python / Django ---
+*.pyo
+*.pyd
+*.so
+.Python
+pip-wheel-metadata/
+*.egg-info/
+dist/
+build/
+
+# Unit tests / coverage / type checkers / linters
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Logs
+*.log
+
+# Django collected static
+staticfiles/
+
+# Local overrides / secrets (keep actual source settings tracked)
+**/settings_local.py
+**/local_settings.py
+*.pem
+*.key
+
+# --- IDEs / editors ---
+.vscode/
+.idea/
+*.code-workspace
+
+# --- OS files ---
+.DS_Store
+Thumbs.db
+Desktop.ini
