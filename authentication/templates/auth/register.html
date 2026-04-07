@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Sign Up | ChessWeb{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/auth.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="auth-page">
+    <div class="auth-card">
+        <div class="auth-header">
+            <img src="{% static 'images/ChessCraft Logo.png' %}" class="auth-logo">
+            <h2>Create Account</h2>
+            <p>Join ChessWeb and elevate your game</p>
+        </div>
+
+        <form method="POST" class="auth-form">
+            {% csrf_token %}
+
+            <div class="form-group">
+                <label for="id_user_name">Username</label>
+                {{ form.user_name }}
+            </div>
+
+            <div class="form-group">
+                <label for="id_email">Email Address</label>
+                {{ form.email }}
+            </div>
+
+            <div class="form-group">
+                <label for="id_password">Password</label>
+                <div class="password-wrapper">
+                    {{ form.password }}
+                    <button type="button" class="toggle-password" onclick="togglePassword('id_password', this)" aria-label="Show password">
+                        <i class="bi bi-eye"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="id_confirm_password">Confirm Password</label>
+                <div class="password-wrapper">
+                    {{ form.confirm_password }}
+                    <button type="button" class="toggle-password" onclick="togglePassword('id_confirm_password', this)" aria-label="Show password">
+                        <i class="bi bi-eye"></i>
+                    </button>
+                </div>
+            </div>
+
+            <button type="submit" class="auth-btn">Create Account</button>
+        </form>
+
+        <div class="auth-footer">
+            Already have an account? <a href="{% url 'login' %}" class="auth-link">Log In</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/auth.js' %}"></script>
+{% endblock %}

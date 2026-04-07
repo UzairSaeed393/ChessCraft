@@ -1,0 +1,123 @@
+:root{
+    --primary:#0A653A;
+    --primary-dark: #084f2d;
+    --secondary: rgb(166, 248, 166);
+    --mainbg: #d1e7dd;
+    --bg1: rgb(148, 215, 237);
+    --bg2:#91db91;
+    --btn1: #ff9f1c;
+    --btn2: rgb(30, 60, 85);
+    --lighttext: white;
+    --darkgreentext: #0A653A;
+    --darktext: black;
+     --font1: 'Poppins', sans-serif;
+    --font2: 'roboto', sans-serif;
+}
+
+/* Contact head Section */
+.contacthead {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    margin-top: 40px;
+    text-align: center;
+}
+.contactbody{
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+/* Contact info Section */
+.infosection {
+    border-radius: 20px;
+    background-color: var(--bg2);
+    margin: 20px;
+    width: 80vw;
+}
+
+.info-title {
+    font-family: 'Poppins', sans-serif;
+    font-weight: 500;
+    color: var(--primary);
+}
+
+/* Icon box style */
+.icon-box {
+    width: 45px;
+    height: 45px;
+    background-color:  var(--primary);
+    color:  var(--lighttext);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    font-size: 20px;
+}
+
+
+.info-heading {
+    font-weight: 500;
+    font-family: 'Poppins', sans-serif;
+    color: var(--primary);
+    margin-bottom: 3px;
+}
+
+.info-text {
+    color: var(var(--darktext));
+    font-family: 'Roboto', sans-serif;
+}
+
+/* Hover effect for whole item */
+.info-item:hover {
+    background-color: rgba(10, 92, 54, 0.05);
+    border-radius: 10px;
+    padding-left: 5px;
+    transition: 0.2s ease-in-out;
+}
+
+/* Contact form Section */
+
+.formsection {
+    background-color: var(--bg2);
+    border-radius: 20px;
+    border: 10px;
+    width: 80vw;
+}
+
+/* Form Title */
+.form-title {
+    font-family: 'Poppins', sans-serif;
+    font-weight: 500;
+    color: var(--darktext);
+    text-align: center;
+}
+
+/* Input Styling */
+.formsection input,
+.formsection textarea {
+    background-color:  var(--lighttext);
+    border: 1px solid  var(--bg2);
+    border-radius: 10px;
+    font-family: 'Roboto', sans-serif;
+    font-size: 15px;
+    padding: 12px;
+}
+
+/* Submit Button */
+.submit-btn {
+    background-color:  var(--btn1);
+    color:  var(--lighttext);
+    font-weight: 500;
+    padding: 12px;
+    border-radius: 30px;
+    font-size: 16px;
+    transition: 0.3s ease;
+}
+
+.submit-btn:hover {
+    background-color: #e67c00;
+    transform: translateY(-2px);
+    box-shadow: 0px 4px 10px rgba(0,0,0,0.2);
+}

@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}DietCraft{% endblock %}</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Roboto:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
+    {% load static %}
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet"
+        integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
+
+    <!-- Global Styles -->
+    <link rel="stylesheet" href="{% static 'css/base.css' %}">
+    {% block extra_css %}{% endblock %}
+</head>
+
+<body>
+    <nav class="navbar">
+        <div class="left-nav-group">
+            <div class="menu-toggle" id="menuToggle">&#9776;</div>
+            <div class="logo-section">
+                <img src="{% static 'images/ChessCraft Logo.png' %}" alt="ChessCraft Logo">
+                <h3>CHESSCRAFT</h3>
+            </div>
+        </div>
+        <div class="nav-links desktop-nav">
+            <a href="/">Home</a>
+            <a href="/exercises/">Games</a>
+            <a href="/meals/">Analysis</a>
+            <a href="/meals/fooditems/">Insights</a>
+            <a href="/about/">About</a>
+            <a href="/contact/">Contact</a>
+        </div>
+
+        <!-- AUTH BUTTONS -->
+        <div class="auth-buttons">
+            {% if user.is_authenticated %}
+            <a href="/users/profile/" class="username-link">
+                <i class="bi bi-person-circle me-1"></i> {{ user.username }}
+            </a>
+            <a href="/auth/logout/" class="logout-btn">Logout</a>
+
+            {% else %}
+            <a href="/auth/login/" class="login-btn">Login</a>
+            <a href="/auth/signup/" class="signup-btn">Sign Up</a>
+            {% endif %}
+        </div>
+
+    </nav>
+
+    <div class="sidebar" id="sidebar">
+        <div class="close-btn" id="closeSidebar">&times;</div>
+        <div class="nav-links mobile-nav">
+            <a href="/">Home</a>
+            <a href="/exercises/">Games</a>
+            <a href="/meals/">Analysis</a>
+            <a href="/meals/fooditems/">Insights</a>
+            <a href="/about/">About</a>
+            <a href="/contact/">Contact</a>
+        </div>
+    </div>
+
+    {% if messages %}
+        <div class="mt-3 px-3">
+            {% for message in messages %}
+                {% with tags=message.tags %}
+                    <div class="alert fw-medium alert-dismissible fade show auto-dismiss
+                        {% if 'error' in tags %}alert-danger
+                        {% elif 'warning' in tags %}alert-warning
+                        {% elif 'success' in tags %}alert-success
+                        {% else %}alert-info{% endif %}"
+                        role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endwith %}
+            {% endfor %}
+        </div>
+    {% endif %}
+
+
+    <main class="container">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer style="background-color: #0A5C36; color: white; padding: 40px 0; margin-top: 40px;">
+        <div class="container">
+            <div class="row">
+                <!-- Brand Section -->
+                <div class="col-md-3">
+                    <h4 class="fw-bold text-white">
+                        <img src="{% static 'images/ChessCraft logo.png' %}" width="45" height="45" class="me-2 rounded">
+                        ChessCraft
+                    </h4>
+                    <p>Your personalized chess training companion for a better gaming experience.</p>
+
+                    <!-- Social Icons -->
+                    <div>
+                        <a href="#" class="text-white me-3 fs-4"><i class="bi bi-facebook"></i></a>
+                        <a href="#" class="text-white me-3 fs-4"><i class="bi bi-twitter"></i></a>
+                        <a href="#" class="text-white fs-4"><i class="bi bi-instagram"></i></a>
+                    </div>
+                </div>
+
+                <!-- Quick Links -->
+                <div class="col-md-3">
+                    <h5 class="fw-bold mb-3">Quick Links</h5>
+                    <ul class="list-unstyled">
+                        <li><a href="/games/" class="text-white text-decoration-none">Games</a></li>
+                        <li><a href="/analysis/" class="text-white text-decoration-none">Analysis</a></li>
+                        <li><a href="/insights/" class="text-white text-decoration-none">Insights</a></li>
+                    </ul>
+                </div>
+
+                <!-- Support -->
+                <div class="col-md-3">
+                    <h5 class="fw-bold mb-3">Support</h5>
+                    <ul class="list-unstyled">
+                        <li><a href="/contact/" class="text-white text-decoration-none">Contact Us</a></li>
+                        <li><a href="/about/" class="text-white text-decoration-none">About Us</a></li>
+                    </ul>
+                </div>
+
+                <!-- Contact Info -->
+                <div class="col-md-3">
+                    <h5 class="fw-bold mb-3">Contact Info</h5>
+                    <ul class="list-unstyled">
+                        <li><i class="bi bi-envelope-fill me-2"></i> ChessCraftinfo@gmail.com</li>
+                    </ul>
+                </div>
+
+            </div>
+
+            <hr class="border-light mt-4">
+            <p class="text-center mb-0">© 2026 ChessCraft. All rights reserved.</p>
+        </div>
+    </footer>
+
+    {% load static %}
+    <script src="{% static 'js/script.js' %}"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    {% block extra_js %}{% endblock %}
+</body>
+
+</html>

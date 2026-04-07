@@ -1,0 +1,162 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}About{% endblock %}
+
+{% block extra_css %}
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+<link rel="stylesheet" href="{% static 'css/about.css' %}">
+
+{% endblock %}
+
+{% block content %}
+<div class="container">
+
+    <div class="abouthead bg2">
+        <h2>About ChessCraft</h2>
+        <p>ChessCraft is a comprehensive chess platform designed to enhance the gaming experience for players of all levels.</p>
+        <div class=" mt-3 mb-5">
+            <p>
+                ChessCraft is a handy chess companion that provides personalized training, game analysis, and strategic insights to help you improve your chess skills. Whether you're a beginner looking to learn the basics or an experienced player aiming to refine your strategies, ChessCraft offers a range of features to support your chess journey. With interactive engine analysis , self analysis with help of stockfish, and detailed game breakdowns, ChessCraft is your go-to resource for mastering the art of chess and elevating your gameplay.
+            </p>
+        </div>
+    </div>
+
+
+    <div class="missionsection bg2">
+        <h3>Our Mission</h3>
+        <p>At ChessCraft, our mission is to make chess learning simple, accessible, and enjoyable for everyone. Many players struggle with understanding complex strategies, improving their gameplay, and developing their tactical skills. ChessCraft bridges this gap by offering user to fetch their games from Chess.com, game analysis, and strategic insights — all in one platform. Our mission is to empower players with tools, knowledge, and guidance to build long-term chess expertise.
+        </p>
+    </div>
+
+    <div class="valuessection bg2">
+        <h3>Our Values</h3>
+
+        <div class="valuescardcontainer">
+
+            <div class="valuescard">
+                <div class="cardhead"><i class="bi bi-person-check"></i></div>
+                <h4 class="cardname">Analytics</h4>
+                <p class="cardcontent">We leverage data-driven insights to provide personalized recommendations and improve your chess performance.</p>
+            </div>
+
+            <div class="valuescard">
+                <div class="cardhead"><i class="bi bi-people"></i></div>
+                <h4 class="cardname">Community</h4>
+                <p class="cardcontent">Building a supportive environment where everyone can grow and inspire one another.</p>
+            </div>
+
+            <div class="valuescard">
+                <div class="cardhead"><i class="bi bi-award"></i></div>
+                <h4 class="cardname">Excellence</h4>
+                <p class="cardcontent">We deliver high-quality, research-based recommendations for better results.</p>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- WHAT WE OFFER -->
+    <div class="offersection bg2">
+        <h3>What We Offer</h3>
+
+        <div class="offerscontainer">
+
+            <div class="offer">
+                <h4>Chess Engine</h4>
+                <p>Helps you analyze your games and improve your playing style.</p>
+
+                <button type="button" class="btn btn-outline-success btn-sm mt-3">
+                    <i class="bi bi-chevron-down toggle-icon"></i> View Details
+                </button>
+
+                <div class="expand">
+                    <p class="expandcontent">
+                        ChessCraft uses Stockfish, the world's strongest open-source chess engine, to analyze your games and provide insights. By connecting your Chess.com account, you can fetch your recent games and receive detailed analysis on your moves, including evaluations, suggested improvements, and strategic recommendations. Whether you're looking to understand your mistakes or explore alternative lines, our Chess Engine offers a powerful tool to enhance your chess skills and elevate your gameplay.
+                    </p>
+                </div>
+            </div>
+
+            <div class="offer">
+                <h4>Insights</h4>
+                <p>Provides valuable insights about your game and strategies.</p>
+                <button type="button" class="btn btn-outline-success btn-sm mt-3">
+                    <i class="bi bi-chevron-down toggle-icon"></i> View Details
+                </button>
+                <div class="expand">
+                    <p class="expandcontent">
+                        Our Insights Module provides data-driven analysis of your chess games, your openings and your playing style. By analyzing your game history, we identify patterns, strengths, and weaknesses in your play. You can gain insights into your most successful openings, common mistakes, and areas for improvement. This module helps you understand your unique playing style and provides actionable recommendations to enhance your chess performance.
+                    </p>
+                </div>
+            </div>
+
+            <div class="offer">
+                <h4>Progress Tracking</h4>
+                <p>Track your chess progress, analyze your games, and monitor your improvement over time.</p>
+                <button type="button" class="btn btn-outline-success btn-sm mt-3">
+                    <i class="bi bi-chevron-down toggle-icon"></i> View Details
+                </button>
+                <div class="expand">
+                    <p class="expandcontent">
+                        Our Progress Tracking feature allows you to monitor your chess improvement over time. By analyzing your game history, we provide insights into your performance trends, strengths, and areas for growth. You can track your progress in different openings, identify patterns in your play, and receive personalized recommendations to help you continue improving your chess skills. Whether you're a beginner or an experienced player, our Progress Tracking helps you stay motivated and focused on your chess journey.
+                    </p>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <div class="teamsection bg2">
+        <h3>Our Team</h3>
+
+        <div class="teamcardcontainer">
+
+            <div class="teamcard">
+                <div class="imgsection"><img src="{% static 'images/Dev1.jpeg' %}" alt="Uzair Saeed"></div>
+                <div class="textsection">
+                    <h3>Uzair Saeed</h3>
+                    <h4>Full-Stack Developer</h4>
+                    <p>Builds frontend and backend architecture and develops core modules for chess analysis and improvement.</p>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <div class="technonlogysection bg2">
+        <h3>Built With Modern Technology</h3>
+
+        <div class="techsection">
+
+            <div class="techcard">
+                <h4>Frontend</h4>
+                <p>Built using Django Templates, HTML, CSS, JavaScript, and Bootstrap.</p>
+            </div>
+
+            <div class="techcard">
+                <h4>Backend</h4>
+                <p>Powered by the Django Framework written in Python.</p>
+            </div>
+
+            <div class="techcard">
+                <h4>Database</h4>
+                <p>PostgreSQL stores user data and chess game information.</p>
+            </div>
+            <div class="techcard">
+                <h4>Chess Engine</h4>
+                <p>Integrates Stockfish, the world's strongest open-source chess engine, for game analysis and insights.</p>
+            </div>
+            <div class="techcard">
+                <h4>UI Design</h4>
+                <p>Designed using Figma to ensure a clean and user-friendly experience.</p>
+            </div>
+
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/about.js' %}"></script>
+{% endblock %}

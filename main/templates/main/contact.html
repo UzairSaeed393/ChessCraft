@@ -1,0 +1,77 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Contact{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/contact.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="container ">
+    <div class="contacthead">
+        <h2>Get in touch</h2>
+        <p>Have questions or feedback? We'd love to hear from you...</p>
+    </div>
+
+    <div class="contactbody">
+        <div class="formsection bg2 card shadow-sm p-4">
+            <h4 class="form-title mb-3">Send us a Message</h4>
+            <form method="POST" action="">
+                {% csrf_token %}
+                <div class="row">
+                    <!-- First Name -->
+                    <div class="col-md-6 mb-3">
+                        {{ form.first_name }}
+                    </div>
+                    <!-- Last Name -->
+                    <div class="col-md-6 mb-3">
+                        {{ form.last_name }}
+                    </div>
+                </div>
+                <!-- Email -->
+                <div class="mb-3">
+                    {{ form.email }}
+                </div>
+                <!-- Phone -->
+                <div class="mb-3">
+                    {{ form.phone }}
+                </div>
+                <!-- Subject -->
+                <div class="mb-3">
+                    {{ form.subject }}
+                </div>
+
+                <!-- Message -->
+                <div class="mb-3">
+                    {{ form.message }}
+                </div>
+                <!-- Submit Button -->
+                <button type="submit" class="btn submit-btn w-100 mt-2">
+                    <i class="bi bi-send-fill me-2"></i> Send Message
+                </button>
+            </form>
+        </div>
+
+        <div class="infosection bg2 card shadow-sm border-0 p-4">
+            <h4 class="info-title mb-4">Contact Information</h4>
+            <!-- Email -->
+            <div class="d-flex align-items-start mb-4 p-2 info-item">
+                <div class="icon-box me-3">
+                    <i class="bi bi-envelope-fill"></i>
+                </div>
+                <div>
+                    <h6 class="info-heading">Email</h6>
+                    <p class="info-text mb-0">ChessCraftinfo@gmail.com</p>
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/contact.js' %}"></script>
+{% endblock %}
