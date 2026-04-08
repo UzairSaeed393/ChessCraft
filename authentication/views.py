@@ -4,9 +4,12 @@ from django.contrib.auth import authenticate, login, logout
 from django.core.mail import send_mail
 from django.conf import settings
 from .forms import RegisterForm, LoginForm
-from .models import UserOTP
+from .models import UserOTP, PendingRegistration
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import get_user_model
+from django.contrib.auth.hashers import make_password
+from django.shortcuts import get_object_or_404
+from django.urls import reverse
 
 # Get the User class dynamically
 User = get_user_model()
@@ -40,47 +43,83 @@ def signup_view(request):
             messages.error(request, "Email already registered.")
             return redirect("signup")
 
-        user = User.objects.create_user(
-            username=user_name,
+        pending, _ = PendingRegistration.objects.update_or_create(
             email=email,
-            password=password,
-            is_active=False
+            defaults={
+                "username": user_name,
+                "password_hash": make_password(password),
+            },
         )
-
-        # Create OTP
-        otp_obj = UserOTP.objects.create(user=user)
-        otp_obj.generate_otp()
+        pending.generate_otp()
 
         # Send OTP email
         send_mail(
             subject="Your ChessCraft Verification Code",
-            message=f"Your OTP For ChessCraft is {otp_obj.otp_code}. It will expire in 5 min. If you did not ask for otp ignore it",
+            message=(
+                f"Your OTP For ChessCraft is {pending.otp_code}. It will expire in 5 min. "
+                "If you did not ask for otp ignore it"
+            ),
             from_email=settings.EMAIL_HOST_USER,
             recipient_list=[email],
         )
 
         messages.success(request, "OTP sent to your email. Please verify your account.")
-        return redirect("verify", user_id=user.id)
+        return redirect("verify", pending_id=pending.id)
     return render(request, "auth/register.html", {"form": form})
 
-def verify_otp_view(request, user_id):
-    user = User.objects.get(id=user_id)
-    otp_obj = UserOTP.objects.get(user=user)
+def verify_otp_view(request, pending_id):
+    pending = get_object_or_404(PendingRegistration, id=pending_id)
+    resend_url = reverse("resend_signup_otp", kwargs={"pending_id": pending_id})
 
     if request.method == "POST":
         entered_otp = request.POST.get("otp")
 
-        if entered_otp == otp_obj.otp_code:
-            user.is_active = True
+        if pending.is_expired():
+            messages.error(request, "OTP expired. Please request a new one.")
+            return redirect("verify", pending_id=pending_id)
+
+        if entered_otp == pending.otp_code:
+            if User.objects.filter(username=pending.username).exists():
+                messages.error(request, "Username already exists. Please sign up again with a different username.")
+                pending.delete()
+                return redirect("signup")
+
+            if User.objects.filter(email=pending.email).exists():
+                messages.error(request, "Email already registered. Please log in.")
+                pending.delete()
+                return redirect("login")
+
+            user = User(
+                username=pending.username,
+                email=pending.email,
+                is_active=True,
+            )
+            user.password = pending.password_hash
             user.save()
-            otp_obj.delete()
+            pending.delete()
 
             messages.success(request, "Account verified! You can now log in.")
             return redirect("login")
 
         messages.error(request, "Invalid OTP. Try again.")
 
-    return render(request, "auth/verify.html", {"user_id": user_id})
+    return render(request, "auth/verify.html", {"resend_url": resend_url})
+
+
+def resend_signup_otp(request, pending_id):
+    pending = get_object_or_404(PendingRegistration, id=pending_id)
+
+    pending.generate_otp()
+
+    send_mail(
+        subject="Your New ChessCraft Verification Code",
+        message=f"Your new OTP for ChessCraft is {pending.otp_code}. It expires in 5 minutes.",
+        from_email=settings.EMAIL_HOST_USER,
+        recipient_list=[pending.email],
+    )
+
+    messages.success(request, "A new OTP has been sent to your email.")
+    return redirect("verify", pending_id=pending_id)
 
 def resend_otp(request, user_id):
     user = User.objects.get(id=user_id)
@@ -96,7 +135,7 @@ def resend_otp(request, user_id):
     )
 
     messages.success(request, "A new OTP has been sent to your email.")
-    return redirect("verify", user_id=user_id)
+    return redirect("forgot_verify", user_id=user_id)
 
 
 #   LOGIN VIEW
@@ -172,6 +211,7 @@ def forgot_password_view(request):
 def forgot_verify_view(request, user_id):
     user = User.objects.get(id=user_id)
     otp_obj = UserOTP.objects.get(user=user)
+    resend_url = reverse("resend_otp", kwargs={"user_id": user_id})
 
     if request.method == "POST":
         entered_otp = request.POST.get("otp")
@@ -185,7 +225,7 @@ def forgot_verify_view(request, user_id):
 
         messages.error(request, "Invalid OTP.")
 
-    return render(request, "auth/verify.html", {"user_id": user_id})
+    return render(request, "auth/verify.html", {"resend_url": resend_url})
 
 def reset_password_view(request, user_id):
     user = User.objects.get(id=user_id)

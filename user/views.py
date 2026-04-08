@@ -2,8 +2,10 @@ from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.contrib.auth import get_user_model
+from django.contrib.auth import logout
 from django.db import IntegrityError
 from django.core.paginator import Paginator
+from django.views.decorators.http import require_POST
 from .utils import fetch_and_save_games
 from .models import Game
 
@@ -102,3 +104,25 @@ def game_view(request):
             'total_games': games_qs.count(),
         },
     )
+
+
+@login_required
+@require_POST
+def delete_account_view(request):
+    password = (request.POST.get("password") or "").strip()
+    if not password:
+        messages.error(request, "Please enter your password to delete your account.")
+        return redirect('profile')
+
+    if not request.user.check_password(password):
+        messages.error(request, "Incorrect password. Account not deleted.")
+        return redirect('profile')
+
+    user_to_delete = request.user
+    username = user_to_delete.username
+
+    logout(request)
+    user_to_delete.delete()
+
+    messages.success(request, f"Account '{username}' deleted successfully.")
+    return redirect('home')

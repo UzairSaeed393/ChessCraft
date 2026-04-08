@@ -73,6 +73,21 @@
                     <div class="mt-4">
                         <a class="btn btn-outline-success w-100" href="{% url 'game' %}">Back to Games</a>
                     </div>
+
+                    <hr class="my-4">
+
+                    <h5 class="mb-3" style="font-family: var(--font1); color: var(--primary-dark);">Account</h5>
+
+                    <form method="POST" action="{% url 'delete_account' %}" onsubmit="return confirm('Are you sure you want to delete your account? This action cannot be undone.');">
+                        {% csrf_token %}
+                        <div class="mb-2">
+                            <label class="form-label fw-bold" for="delete_account_password" style="color: var(--darktext);">Confirm Password</label>
+                            <input type="password" name="password" id="delete_account_password" class="form-control" placeholder="Enter your password" required>
+                        </div>
+                        <button type="submit" class="btn btn-danger w-100">
+                            Delete Account
+                        </button>
+                    </form>
                 </div>
             </div>
 

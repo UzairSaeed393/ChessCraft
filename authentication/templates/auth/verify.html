@@ -29,7 +29,9 @@
 
         <div class="auth-footer">
             Didn't receive the code? <br><br>
-            <a href="{% url 'resend_otp' user_id %}" class="auth-link">Resend OTP</a>
+            {% if resend_url %}
+                <a href="{{ resend_url }}" class="auth-link">Resend OTP</a>
+            {% endif %}
         </div>
     </div>
 </div>
