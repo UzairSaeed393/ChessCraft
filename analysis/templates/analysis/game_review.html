@@ -1,0 +1,80 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Game Review | ChessCraft{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/analysis.css' %}">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+<link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
+{% endblock %}
+
+{% block content %}
+<div class="analysis-body py-4">
+    <div class="container-fluid px-lg-5">
+        <div class="row g-4">
+            <div class="col-lg-8">
+                <div class="d-flex justify-content-center" style="height: 600px;">
+                    <div class="eval-wrapper">
+                        <div id="eval-fill" class="eval-fill"></div>
+                    </div>
+                    <div id="mainBoard" style="width: 600px"></div>
+                </div>
+
+                <div class="d-flex justify-content-center mt-4">
+                    <div class="btn-group shadow-sm p-2 bg-white rounded">
+                        <button id="btnStart" class="btn btn-outline-success border-0"><i class="bi bi-chevron-bar-left"></i></button>
+                        <button id="btnPrev" class="btn btn-outline-success border-0"><i class="bi bi-chevron-left"></i></button>
+                        <button id="btnNext" class="btn btn-outline-success border-0"><i class="bi bi-chevron-right"></i></button>
+                        <button id="btnEnd" class="btn btn-outline-success border-0"><i class="bi bi-chevron-bar-right"></i></button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-4">
+                <div class="bg-panel mb-4 shadow-sm">
+                    <div class="row align-items-center">
+                        <div class="col-5 accuracy-box">
+                            <small class="text-muted text-uppercase fw-bold">{{ username }}</small>
+                            <div id="white-acc" class="accuracy-value">--</div>
+                        </div>
+                        <div class="col-2 text-center fw-bold text-muted">VS</div>
+                        <div class="col-5 accuracy-box">
+                            <small class="text-muted text-uppercase fw-bold">Opponent</small>
+                            <div id="black-acc" class="accuracy-value" style="color: var(--btn2);">--</div>
+                        </div>
+                    </div>
+                    <hr>
+                    <div style="height: 120px;">
+                        <canvas id="reviewChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="bg-panel mb-4 shadow-sm">
+                    <h6 class="fw-bold mb-3 text-uppercase small">Game Review Summary</h6>
+                    <div class="badge-item brilliant"><span>!! Brilliant</span> <span id="count-brilliant">0</span></div>
+                    <div class="badge-item best"><span>★ Best</span> <span id="count-best">0</span></div>
+                    <div class="badge-item blunder"><span>?? Blunder</span> <span id="count-blunder">0</span></div>
+                </div>
+
+                <div class="engine-alert">
+                    <div class="d-flex align-items-center mb-2">
+                        <i class="bi bi-robot me-2"></i>
+                        <span class="fw-bold">Stockfish 16.1</span>
+                    </div>
+                    <p id="move-desc" class="small mb-0">Drag a piece to start a "What-If" analysis.</p>
+                    <div id="suggestion-box" class="mt-2 fw-bold text-success"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+<script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="{% static 'js/analysis.js' %}"></script>
+{% endblock %}

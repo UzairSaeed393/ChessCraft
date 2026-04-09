@@ -1,37 +1,31 @@
-
 from pathlib import Path
 import os
-from pathlib import Path
 import environ
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# 1. Base Directory Setup
+# Build paths inside the project like this: BASE_DIR / 'subdir'.
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+# 2. Environment Variables Configuration
 env = environ.Env()
+# This line tells Django to look for the .env file in the same folder as manage.py
 environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
 
-
-# SECURITY WARNING: keep the secret key used in production secret!
+# 3. Security Settings
+# Values are pulled from your .env file for security
 SECRET_KEY = env('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
+# Combined your Azure Public IP and local development addresses
 ALLOWED_HOSTS = ['20.189.112.196', 'localhost', '127.0.0.1']
 
-SITE_ID = env.int('SITE_ID')
-SITE_URL = env('SITE_URL')
+# 4. Site Identification
+SITE_ID = env.int('SITE_ID', default=1)
+SITE_URL = env('SITE_URL', default='http://localhost:8000')
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
-BASE_DIR = Path(__file__).resolve().parent.parent
-
-
-SECRET_KEY = env('SECRET_KEY')
-DEBUG = True
-
-ALLOWED_HOSTS = []
-
-
-# Application definition
-
+# 5. Application Definition
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -42,6 +36,7 @@ INSTALLED_APPS = [
     'authentication',
     'main',
     'user',
+    'analysis',
 ]
 
 MIDDLEWARE = [
@@ -76,9 +71,7 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'ChessCraft.wsgi.application'
 
-
-# Database
-# https://docs.djangoproject.com/en/6.0/ref/settings/#databases
+# 6. Database Configuration (PostgreSQL)
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
@@ -89,50 +82,40 @@ DATABASES = {
         'PORT': env('DB_PORT', default='5432'),
     }
 }
-# Password validation
-# https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators
-AUTH_USER_MODEL = 'user.User'
 
-# Where @login_required redirects unauthenticated users.
+# 7. User & Authentication
+AUTH_USER_MODEL = 'user.User'
 LOGIN_URL = '/auth/login/'
+
 AUTH_PASSWORD_VALIDATORS = [
-    {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
-    },
+    {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
 ]
 
-
-# Internationalization
-# https://docs.djangoproject.com/en/6.0/topics/i18n/
-
+# 8. Internationalization
 LANGUAGE_CODE = 'en-us'
-
 TIME_ZONE = 'UTC'
-
 USE_I18N = True
-
 USE_TZ = True
 
-
-# Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/6.0/howto/static-files/
-
-
+# 9. Static and Media Files
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfile')
 STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+# 10. Email Configuration
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = env('EMAIL_HOST_USER')
+EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD')
+DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL')
 
 # Stockfish Configuration
 # Auto-detect stockfish path
@@ -164,12 +147,12 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 # STOCKFISH_PATH = os.environ.get('STOCKFISH_PATH') or find_stockfish()
 # STOCKFISH_DEPTH = int(os.environ.get('STOCKFISH_DEPTH', '18'))
 
-# Email Configuration
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'smtp.gmail.com'
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
+# # Email Configuration
+# EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+# EMAIL_HOST = 'smtp.gmail.com'
+# EMAIL_PORT = 587
+# EMAIL_USE_TLS = True
 
-EMAIL_HOST_USER = env('EMAIL_HOST_USER')
-EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD')
-DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL')
+# EMAIL_HOST_USER = env('EMAIL_HOST_USER')
+# EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD')
+# DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL')

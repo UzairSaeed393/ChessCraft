@@ -1,0 +1,93 @@
+/* Color Palette */
+:root {
+    --bg-dark: #262421;
+    --panel-dark: #312e2b;
+    --accent: #81b64c;
+    --white: #ffffff;
+    --text-dim: #bababa;
+}
+
+body { background: var(--bg-dark); }
+
+/* Layout Logic */
+.analysis-wrapper {
+    display: flex;
+    max-width: 1400px;
+    margin: 20px auto;
+    gap: 20px;
+    padding: 0 15px;
+}
+
+.pane-content { flex: 1; }
+#pane-review { 
+    background: var(--panel-dark); 
+    border-radius: 8px; 
+    padding: 20px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+}
+
+/* Board & Eval Bar */
+.board-container { display: flex; gap: 10px; width: 100%; justify-content: center; }
+.evaluation-bar {
+    width: 35px;
+    background: #403d39;
+    border-radius: 4px;
+    position: relative;
+    display: flex;
+    flex-direction: column-reverse;
+    overflow: hidden;
+}
+.evaluation-bar .fill { background: white; width: 100%; height: 50%; transition: 0.3s; }
+#eval-score { 
+    position: absolute; width: 100%; text-align: center; 
+    bottom: 50%; font-size: 11px; font-weight: bold; color: #000;
+}
+
+/* UI Components */
+.review-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
+.user-info { display: flex; align-items: center; gap: 12px; }
+.coach-img { width: 50px; border-radius: 50%; }
+
+.acc-pill { padding: 8px 15px; border-radius: 4px; font-weight: 800; }
+.white-pill { background: #fff; color: #000; }
+.black-pill { background: #444; color: #fff; }
+
+.chart-container { height: 150px; width: 100%; margin: 20px 0; }
+
+.stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+.stat-item { 
+    background: rgba(255,255,255,0.05); 
+    padding: 10px; 
+    border-radius: 4px; 
+    display: flex; 
+    justify-content: space-between;
+    font-size: 13px;
+}
+.brilliant { border-left: 4px solid #26c2a3; }
+.blunder { border-left: 4px solid #b33430; }
+
+.btn-primary-action {
+    width: 100%;
+    background: var(--accent);
+    color: white;
+    border: none;
+    padding: 15px;
+    font-weight: bold;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+/* Mobile Responsiveness */
+.mobile-tabs { display: none; }
+
+@media (max-width: 992px) {
+    .analysis-wrapper { flex-direction: column; padding-bottom: 90px; }
+    .mobile-tabs { 
+        display: flex; position: fixed; bottom: 0; left: 0; 
+        width: 100%; background: #1a1917; border-top: 1px solid #333;
+    }
+    .tab-link { flex: 1; padding: 15px; background: none; border: none; color: var(--text-dim); text-align: center; }
+    .tab-link.active { color: var(--accent); border-top: 3px solid var(--accent); }
+    .pane-content { display: none; }
+    .pane-content.active { display: block; }
+}
