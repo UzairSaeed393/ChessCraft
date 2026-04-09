@@ -1,0 +1,176 @@
+:root {
+    --primary: #0A653A;
+    --primary-dark: #084f2d;
+    --secondary: rgb(166, 248, 166);
+    --mainbg: #d1e7dd;
+    --bg1: rgb(148, 215, 237);
+    --bg2: #91db91;
+    --btn1: #ff9f1c;
+    --btn2: rgb(30, 60, 85);
+    --lighttext: white;
+    --darkgreentext: #0A653A;
+    --darktext: black;
+    --font1: 'Poppins', sans-serif;
+    --font2: 'Roboto', sans-serif;
+}
+
+
+
+
+body{
+    background: url('/static/images/Login_bg.png') center/cover no-repeat;
+}
+
+/* Ensure auth pages can center inside base.html's <main class="container"> */
+main.container {
+    padding-top: 0;
+}
+
+.auth-page {
+    min-height: calc(100vh - 140px);
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding: clamp(24px, 5vh, 64px) 0;
+}
+
+.auth-card {
+    width: min(520px, 100%);
+    background: #F6FDF9;
+    padding: clamp(22px, 3.5vw, 40px);
+    border-radius: 18px;
+    text-align: left;
+    box-shadow: 0px 4px 20px rgba(0,0,0,0.08);
+}
+
+.auth-header {
+    text-align: center;
+    margin-bottom: 18px;
+}
+
+.auth-logo {
+    width: clamp(80px, 10vw, 110px);
+    height: clamp(80px, 10vw, 110px);
+    object-fit: cover;
+    margin-bottom: 12px;
+    border-radius: 50px;
+}
+
+.auth-header h2 {
+    color: #0A5C36;
+    font-weight: 600;
+    margin-bottom: 6px;
+    font-family: var(--font1);
+}
+
+.auth-header p {
+    color: #666;
+    margin-bottom: 0;
+    font-family: var(--font2);
+}
+
+.auth-form {
+    margin-top: 10px;
+}
+
+.form-group {
+    margin-bottom: 14px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 500;
+    color: #223;
+}
+
+.auth-input {
+    width: 100%;
+    padding: 14px;
+    border-radius: 10px;
+    border: 1px solid #ccc;
+    background: #fff;
+}
+
+.auth-input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(10, 101, 58, 0.15);
+}
+
+.auth-btn {
+    width: 100%;
+    background: #0A5C36;
+    padding: 14px;
+    border-radius: 10px;
+    color: white;
+    border: none;
+    font-size: 16px;
+    font-weight: 600;
+    margin-top: 6px;
+}
+
+.auth-btn:hover {
+    background: var(--primary-dark);
+}
+
+.auth-options {
+    display: flex;
+    justify-content: flex-end;
+    margin: 8px 0 2px;
+}
+
+.auth-footer {
+    margin-top: 18px;
+    text-align: center;
+    color: #555;
+}
+
+.auth-link {
+    color: #0A5C36;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.auth-link:hover {
+    text-decoration: underline;
+}
+
+.password-wrapper {
+    position: relative;
+}
+
+.password-wrapper .auth-input {
+    padding-right: 45px;
+}
+
+.toggle-password {
+    position: absolute;
+    top: 50%;
+    right: 10px;
+    transform: translateY(-50%);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    border: none;
+    background: transparent;
+    color: #0A5C36;
+    cursor: pointer;
+}
+
+.toggle-password:focus {
+    outline: none;
+}
+
+/* Messages shown by base.html on all pages */
+.alert.auto-dismiss {
+    border-radius: 12px;
+}
+
+/* Legacy class support (in case any older template uses these) */
+.auth-container { display: flex; justify-content: center; align-items: center; padding: 40px 0; }
+.auth-box { width: min(450px, 100%); background: #F6FDF9; padding: clamp(22px, 3.5vw, 40px); border-radius: 18px; text-align: center; box-shadow: 0px 4px 20px rgba(0,0,0,0.08); }
+.outline-btn { width: 100%; display: block; border: 2px solid #0A5C36; padding: 14px; color: #0A5C36; font-weight: 600; border-radius: 10px; margin-top: 10px; }
+.divider { margin: 20px 0; color: #aaa; font-weight: 500; }

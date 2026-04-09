@@ -4,12 +4,9 @@ import os
 from pathlib import Path
 import environ
 
-
-env = environ.Env()
-environ.Env.read_env()
-
-
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+env = environ.Env()
+environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
 
 
 # SECURITY WARNING: keep the secret key used in production secret!
@@ -18,7 +15,7 @@ SECRET_KEY = env('SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['127.0.0.1', 'localhost', '[::1]']
+ALLOWED_HOSTS = ['20.189.112.196', 'localhost', '127.0.0.1']
 
 SITE_ID = env.int('SITE_ID')
 SITE_URL = env('SITE_URL')
@@ -29,9 +26,6 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = env('SECRET_KEY')
 DEBUG = True
-
-ALLOWED_HOSTS = []
-
 
 # Application definition
 
@@ -82,19 +76,16 @@ WSGI_APPLICATION = 'ChessCraft.wsgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
-
 DATABASES = {
-     'default': {
+    'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'ChessCraft_DB',
-        'USER': 'postgres',
-        'PASSWORD': 'postgre',
-        'HOST': 'localhost',
-        'PORT': '5432',
+        'NAME': env('DB_NAME'),
+        'USER': env('DB_USER'),
+        'PASSWORD': env('DB_PASSWORD'),
+        'HOST': env('DB_HOST', default='localhost'),
+        'PORT': env('DB_PORT', default='5432'),
     }
 }
-
-
 # Password validation
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators
 AUTH_USER_MODEL = 'user.User'
