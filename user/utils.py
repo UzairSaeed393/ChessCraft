@@ -1,5 +1,6 @@
 import requests
 from datetime import datetime, timedelta, timezone as dt_timezone
+from django.db import IntegrityError
 from django.utils import timezone
 from .models import Game
 
@@ -12,6 +13,22 @@ CHESSCOM_API_HEADERS = {
     ),
     'Accept': 'application/json',
 }
+
+
+def _archive_month_key(archive_url):
+    parts = archive_url.rstrip('/').split('/')
+    if len(parts) < 2:
+        return (0, 0)
+    try:
+        return int(parts[-2]), int(parts[-1])
+    except (TypeError, ValueError):
+        return (0, 0)
+
+
+def _target_archives_for_limit(archives, limit_date):
+    threshold = (limit_date.year, limit_date.month)
+    selected = [url for url in archives if _archive_month_key(url) >= threshold]
+    return selected if selected else archives[-1:]
 
 def fetch_and_save_games(user, chess_username, date_range):
     api_username = (chess_username or '').strip().lower()
@@ -36,16 +53,17 @@ def fetch_and_save_games(user, chess_username, date_range):
     now = timezone.now()
     if date_range == 'week':
         limit_date = now - timedelta(days=7)
-        target_archives = archives[-1:] # Just the current month
     elif date_range == 'month':
         limit_date = now - timedelta(days=30)
-        target_archives = archives[-2:] # Current and previous month to be safe
-    else: # year
+    else:  # year
         limit_date = now - timedelta(days=365)
-        target_archives = archives[-12:] # Last 12 months
+
+    target_archives = _target_archives_for_limit(archives, limit_date)
 
     # 3. Process each archive month
     successful_month_fetch = False
+    candidates = []
+
     for url in target_archives:
         games_res = session.get(url, timeout=20)
         if games_res.status_code != 200:
@@ -56,45 +74,80 @@ def fetch_and_save_games(user, chess_username, date_range):
         month_games = games_res.json().get('games', [])
         
         for g in month_games:
-            game_time = datetime.fromtimestamp(g['end_time'], tz=dt_timezone.utc)
+            end_time = g.get('end_time')
+            if not end_time:
+                continue
+
+            game_time = datetime.fromtimestamp(end_time, tz=dt_timezone.utc)
             
             # Skip if the game is older than our calculated limit
             if game_time < limit_date:
                 continue
             
-            # Avoid duplicates (Crucial for Postgres performance)
-            game_uuid = g.get('uuid')
+            # Use Chess.com UUID as stable dedupe key.
+            game_uuid = (g.get('uuid') or '').strip()
             if not game_uuid:
                 continue
 
-            if Game.objects.filter(user=user, game_id=game_uuid).exists():
-                continue
+            candidates.append((game_uuid, game_time, g))
 
-            # 4. Normalize Result (Win/Loss/Draw)
-            white, black = g['white'], g['black']
-            is_white = white['username'].lower() == api_username
-            res_code = white['result'] if is_white else black['result']
-            
-            if res_code == 'win':
-                outcome = 'Win'
-            elif res_code in ['stalemate', 'repetition', 'insufficient', 'agreed', 'timevsinsufficient', '50move']:
-                outcome = 'Draw'
-            else:
-                outcome = 'Loss'
+    if not candidates:
+        return successful_month_fetch
 
-            # 5. Commit to Database
-            Game.objects.create(
+    existing_ids = set(
+        Game.objects.filter(
+            user=user,
+            game_id__in={game_uuid for game_uuid, _, _ in candidates},
+        ).values_list('game_id', flat=True)
+    )
+
+    staged_ids = set()
+    to_create = []
+
+    for game_uuid, game_time, g in candidates:
+        if game_uuid in existing_ids or game_uuid in staged_ids:
+            continue
+
+        staged_ids.add(game_uuid)
+
+        # 4. Normalize Result (Win/Loss/Draw)
+        white = g.get('white', {})
+        black = g.get('black', {})
+        white_username = (white.get('username') or '').strip()
+        black_username = (black.get('username') or '').strip()
+
+        is_white = white_username.lower() == api_username
+        res_code = (white.get('result') if is_white else black.get('result')) or ''
+
+        if res_code == 'win':
+            outcome = 'Win'
+        elif res_code in ['stalemate', 'repetition', 'insufficient', 'agreed', 'timevsinsufficient', '50move']:
+            outcome = 'Draw'
+        else:
+            outcome = 'Loss'
+
+        # 5. Stage for bulk insert
+        to_create.append(
+            Game(
                 user=user,
                 chess_username_at_time=chess_username,
                 game_id=game_uuid,
                 date_played=game_time,
-                white_player=white['username'],
-                black_player=black['username'],
+                white_player=white_username,
+                black_player=black_username,
                 white_rating=white.get('rating', 0),
                 black_rating=black.get('rating', 0),
                 result=outcome,
                 time_control=g.get('time_control', 'N/A'),
-                pgn=g.get('pgn', '')
+                pgn=g.get('pgn', ''),
             )
+        )
+
+    if to_create:
+        try:
+            Game.objects.bulk_create(to_create, ignore_conflicts=True)
+        except IntegrityError:
+            # UniqueConstraint(user, game_id) still guarantees no duplicates.
+            pass
             
     return successful_month_fetch

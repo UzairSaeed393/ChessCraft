@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 
-{% block title %}Game Review | ChessCraft{% endblock %}
+{% block title %}Game Review{% endblock %}
 
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/analysis.css' %}">
@@ -10,64 +10,103 @@
 {% endblock %}
 
 {% block content %}
-<div class="analysis-body py-4">
-    <div class="container-fluid px-lg-5">
-        <div class="row g-4">
-            <div class="col-lg-8">
-                <div class="d-flex justify-content-center" style="height: 600px;">
-                    <div class="eval-wrapper">
-                        <div id="eval-fill" class="eval-fill"></div>
-                    </div>
-                    <div id="mainBoard" style="width: 600px"></div>
-                </div>
+<div class="review-shell" data-game-id="{{ game.id }}" data-username="{{ user.username }}">
+    <section class="summary-panel">
+        <div class="summary-header">
+            <h2><i class="bi bi-star-fill"></i> Game Review</h2>
+            <p id="summaryText">Generating full review with Azure Stockfish...</p>
+        </div>
 
-                <div class="d-flex justify-content-center mt-4">
-                    <div class="btn-group shadow-sm p-2 bg-white rounded">
-                        <button id="btnStart" class="btn btn-outline-success border-0"><i class="bi bi-chevron-bar-left"></i></button>
-                        <button id="btnPrev" class="btn btn-outline-success border-0"><i class="bi bi-chevron-left"></i></button>
-                        <button id="btnNext" class="btn btn-outline-success border-0"><i class="bi bi-chevron-right"></i></button>
-                        <button id="btnEnd" class="btn btn-outline-success border-0"><i class="bi bi-chevron-bar-right"></i></button>
-                    </div>
-                </div>
+        <div class="summary-chart-card">
+            <canvas id="reviewChart"></canvas>
+        </div>
+
+        <div class="players-row">
+            <article class="player-card" id="whiteCard">
+                <h3 id="whiteName">{{ game.white_player }}</h3>
+                <p class="muted">White</p>
+                <div class="accuracy" id="whiteAcc">--</div>
+            </article>
+            <article class="player-card" id="blackCard">
+                <h3 id="blackName">{{ game.black_player }}</h3>
+                <p class="muted">Black</p>
+                <div class="accuracy" id="blackAcc">--</div>
+            </article>
+        </div>
+
+        <div class="metric-row">
+            <div class="metric-box">
+                <span>Total Accuracy</span>
+                <strong id="totalAcc">--</strong>
             </div>
-
-            <div class="col-lg-4">
-                <div class="bg-panel mb-4 shadow-sm">
-                    <div class="row align-items-center">
-                        <div class="col-5 accuracy-box">
-                            <small class="text-muted text-uppercase fw-bold">{{ username }}</small>
-                            <div id="white-acc" class="accuracy-value">--</div>
-                        </div>
-                        <div class="col-2 text-center fw-bold text-muted">VS</div>
-                        <div class="col-5 accuracy-box">
-                            <small class="text-muted text-uppercase fw-bold">Opponent</small>
-                            <div id="black-acc" class="accuracy-value" style="color: var(--btn2);">--</div>
-                        </div>
-                    </div>
-                    <hr>
-                    <div style="height: 120px;">
-                        <canvas id="reviewChart"></canvas>
-                    </div>
-                </div>
-
-                <div class="bg-panel mb-4 shadow-sm">
-                    <h6 class="fw-bold mb-3 text-uppercase small">Game Review Summary</h6>
-                    <div class="badge-item brilliant"><span>!! Brilliant</span> <span id="count-brilliant">0</span></div>
-                    <div class="badge-item best"><span>★ Best</span> <span id="count-best">0</span></div>
-                    <div class="badge-item blunder"><span>?? Blunder</span> <span id="count-blunder">0</span></div>
-                </div>
-
-                <div class="engine-alert">
-                    <div class="d-flex align-items-center mb-2">
-                        <i class="bi bi-robot me-2"></i>
-                        <span class="fw-bold">Stockfish 16.1</span>
-                    </div>
-                    <p id="move-desc" class="small mb-0">Drag a piece to start a "What-If" analysis.</p>
-                    <div id="suggestion-box" class="mt-2 fw-bold text-success"></div>
-                </div>
+            <div class="metric-box">
+                <span>Game Rating</span>
+                <strong><span id="whiteRatingEst">--</span> / <span id="blackRatingEst">--</span></strong>
             </div>
         </div>
-    </div>
+
+        <div class="breakdown-card">
+            <h4>Move Breakdown</h4>
+            <div class="breakdown-head">
+                <span>Category</span>
+                <span>White</span>
+                <span>Black</span>
+            </div>
+            <div id="breakdownRows"></div>
+        </div>
+
+        <div class="phase-card">
+            <h4>Phase Accuracy</h4>
+            <div class="phase-grid">
+                <div>Opening</div>
+                <div id="phaseOpeningWhite">--</div>
+                <div id="phaseOpeningBlack">--</div>
+                <div>Middlegame</div>
+                <div id="phaseMiddleWhite">--</div>
+                <div id="phaseMiddleBlack">--</div>
+                <div>Endgame</div>
+                <div id="phaseEndWhite">--</div>
+                <div id="phaseEndBlack">--</div>
+            </div>
+        </div>
+
+        <button id="startReviewBtn" class="start-btn" disabled>Start Review</button>
+    </section>
+
+    <section class="review-stage" id="reviewStage" hidden>
+        <div class="board-column">
+            <div class="board-wrap">
+                <div class="eval-bar">
+                    <div id="eval-fill" class="eval-fill"></div>
+                    <span id="eval-score">0.0</span>
+                </div>
+                <div id="mainBoard" class="main-board"></div>
+            </div>
+
+            <div class="board-controls">
+                <button id="btnStart" type="button"><i class="bi bi-chevron-bar-left"></i></button>
+                <button id="btnPrev" type="button"><i class="bi bi-chevron-left"></i></button>
+                <button id="btnNext" type="button"><i class="bi bi-chevron-right"></i></button>
+                <button id="btnEnd" type="button"><i class="bi bi-chevron-bar-right"></i></button>
+            </div>
+        </div>
+
+        <aside class="review-side">
+            <div class="move-card">
+                <h4 id="moveTitle">Move Review</h4>
+                <p id="moveClass">Category: --</p>
+                <p id="moveDesc">Select a move to view explanation and follow-up line.</p>
+                <p><strong>Best Move:</strong> <span id="bestMove">--</span></p>
+                <p><strong>Follow-up:</strong> <span id="followLine">--</span></p>
+                <button id="resetLineBtn" type="button" hidden>Back to Main Line</button>
+            </div>
+
+            <div class="move-list-card">
+                <h4>Moves</h4>
+                <div id="moveList" class="move-list"></div>
+            </div>
+        </aside>
+    </section>
 </div>
 {% endblock %}
 

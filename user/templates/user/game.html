@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load static game_extras %}
 
-{% block title %}Game Library - ChessCraft{% endblock %}
+{% block title %}Game{% endblock %}
 
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'css/game.css' %}">
@@ -72,7 +72,7 @@
                     <div class="outcome">
                         <span class="result-text">{{ game.result }}</span>
                     </div>
-                    <button class="btn-analyze">Analyze Game</button>
+                    <a class="btn-analyze text-decoration-none" href="{% url 'analysis_dashboard' game.id %}">Analyze Game</a>
                 </div>
             </div>
             {% empty %}

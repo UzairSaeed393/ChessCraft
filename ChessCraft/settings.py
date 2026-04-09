@@ -1,3 +1,4 @@
+
 from pathlib import Path
 import os
 import environ
@@ -20,6 +21,11 @@ DEBUG = True
 
 # Combined your Azure Public IP and local development addresses
 ALLOWED_HOSTS = ['20.189.112.196', 'localhost', '127.0.0.1']
+
+# Analysis engine settings used by analysis.engine.StockfishManager
+ANALYSIS_ENGINE_MODE = env('ANALYSIS_ENGINE_MODE', default='local')
+ANALYSIS_ENGINE_URL = env('ANALYSIS_ENGINE_URL', default='')
+ANALYSIS_ENGINE_TOKEN = env('ANALYSIS_ENGINE_TOKEN', default='')
 
 # 4. Site Identification
 SITE_ID = env.int('SITE_ID', default=1)
@@ -71,17 +77,31 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'ChessCraft.wsgi.application'
 
-# 6. Database Configuration (PostgreSQL)
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': env('DB_NAME'),
-        'USER': env('DB_USER'),
-        'PASSWORD': env('DB_PASSWORD'),
-        'HOST': env('DB_HOST', default='localhost'),
-        'PORT': env('DB_PORT', default='5432'),
+# 6. Database Configuration
+# Default stays PostgreSQL. Set DB_ENGINE=sqlite on laptop for offline/local fallback.
+db_engine = env('DB_ENGINE', default='postgres').lower()
+
+if db_engine in {'sqlite', 'sqlite3'}:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
+        }
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': env('DB_NAME'),
+            'USER': env('DB_USER'),
+            'PASSWORD': env('DB_PASSWORD'),
+            'HOST': env('DB_HOST', default='localhost'),
+            'PORT': env('DB_PORT', default='5432'),
+            'OPTIONS': {
+                'connect_timeout': env.int('DB_CONNECT_TIMEOUT', default=6),
+            },
+        }
+    }
 
 # 7. User & Authentication
 AUTH_USER_MODEL = 'user.User'
