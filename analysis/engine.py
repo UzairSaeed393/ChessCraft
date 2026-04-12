@@ -1,5 +1,5 @@
 from __future__ import annotations
-
+import math
 import os
 import platform
 from dataclasses import dataclass
@@ -193,7 +193,11 @@ def classify_move(
     move_uci: str,
     best_move_uci: str,
     board_before: chess.Board,
+    is_book: bool = False,
 ) -> str:
+    if is_book:
+        return "book"
+
     move_uci = (move_uci or "").strip()
     best_move_uci = (best_move_uci or "").strip()
     is_best = move_uci and move_uci == best_move_uci
@@ -226,5 +230,6 @@ def accuracy_from_losses(losses: list[int]) -> float:
     if not losses:
         return 100.0
     avg_loss = sum(losses) / len(losses)
-    accuracy = 100.0 - (avg_loss * 0.11)
+    # Exponential formula similar to Chess.com: 100 * e^(-0.005 * avg_loss)
+    accuracy = 100.0 * math.exp(-0.005 * avg_loss)
     return round(max(0.0, min(100.0, accuracy)), 1)

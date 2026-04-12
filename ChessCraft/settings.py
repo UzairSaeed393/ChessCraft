@@ -20,7 +20,7 @@ SECRET_KEY = env('SECRET_KEY')
 DEBUG = True
 
 # Combined your Azure Public IP and local development addresses
-ALLOWED_HOSTS = ['20.189.112.196', 'localhost', '127.0.0.1']
+ALLOWED_HOSTS = ['20.189.112.196','chesscraft.me', 'www.chesscraft.me', 'localhost', '127.0.0.1']
 
 # Analysis engine settings used by analysis.engine.StockfishManager
 ANALYSIS_ENGINE_MODE = env('ANALYSIS_ENGINE_MODE', default='local')

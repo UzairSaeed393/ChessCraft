@@ -71,8 +71,15 @@
                 <div class="card-footer">
                     <div class="outcome">
                         <span class="result-text">{{ game.result }}</span>
+                        {% if game.accuracy is not None %}
+                        <span class="accuracy-badge">
+                            <i class="bi bi-bullseye"></i> {{ game.accuracy|floatformat:0 }}%
+                        </span>
+                        {% endif %}
                     </div>
-                    <a class="btn-analyze text-decoration-none" href="{% url 'analysis_dashboard' game.id %}">Analyze Game</a>
+                    <a class="btn-analyze text-decoration-none" href="{% url 'analysis_dashboard' game.id %}">
+                        {% if game.is_analyzed %}Review Game{% else %}Analyze Game{% endif %}
+                    </a>
                 </div>
             </div>
             {% empty %}

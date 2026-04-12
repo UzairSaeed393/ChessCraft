@@ -6,6 +6,7 @@ from collections import defaultdict
 
 import chess
 import chess.pgn
+import requests
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -23,11 +24,12 @@ CATEGORIES = [
     "best",
     "excellent",
     "good",
+    "book",
     "inaccuracy",
     "miss",
     "mistake",
     "blunder",
-]
+];
 
 PHASES = ["opening", "middlegame", "endgame"]
 
@@ -112,6 +114,37 @@ def _build_move_explanation(
         return f"{move_san} is a mistake and gives up a noticeable edge. Better was {best_san}."
     return f"{move_san} is a blunder. {best_san} was critical to avoid a major swing."
 
+def _fetch_opening_info(session: requests.Session, fen: str, move_uci: str = None) -> dict:
+    """Fetch opening name and check if move_uci is theoretical via Lichess."""
+    try:
+        url = "https://explorer.lichess.ovh/masters"
+        # Always use params so requests correctly urlencodes the FEN
+        resp = session.get(url, params={"fen": fen, "moves": 12}, timeout=3)
+        if resp.status_code == 200:
+            data = resp.json()
+            opening = data.get("opening")
+            
+            is_book = False
+            # If we have a move_uci, check if it exists in the top theoretical moves
+            if move_uci:
+                theory_moves = [m.get("uci") for m in data.get("moves", [])]
+                if move_uci in theory_moves:
+                    is_book = True
+            elif opening:
+                is_book = True
+
+            return {
+                "name": opening.get("name") if opening else None,
+                "eco": opening.get("eco") if opening else None,
+                "is_theory": is_book,
+                "failed": False
+            }
+        else:
+            print(f"Lichess API returned {resp.status_code}")
+    except Exception as e:
+        print(f"Lichess API Exception: {e}")
+    return {"name": None, "eco": None, "is_theory": False, "failed": True}
+
 
 def _empty_side_stats():
     return {
@@ -136,6 +169,9 @@ def _build_game_review_payload(game_obj: Game, user) -> tuple[dict, SavedAnalysi
     start_fen = board.fen()
     eval_history = []
     moves_payload = []
+    
+    # Try to extract opening from PGN headers first
+    opening_name = parsed_game.headers.get("Opening", "Initial Position")
 
     side_stats = {
         "white": _empty_side_stats(),
@@ -150,10 +186,19 @@ def _build_game_review_payload(game_obj: Game, user) -> tuple[dict, SavedAnalysi
     move_rows = []
     mainline_moves = list(parsed_game.mainline_moves())
 
+    session = requests.Session()
+    # Add a custom User-Agent to avoid Lichess blocking the default python-requests UA
+    session.headers.update({"User-Agent": "ChessCraft-Analysis-Engine/1.0"})
+    in_book = True  # We assume we are in book until a non-theory move is played
+
     for ply_index, move in enumerate(mainline_moves, start=1):
         fen_before = board.fen()
         side = "white" if board.turn else "black"
         phase = _phase_for_position(board, ply_index)
+
+        # Defer Lichess processing until AFTER CP loss is calculated 
+        # so we can use CP loss for the offline fallback if Lichess fails.
+        is_book = False
 
         before_eval = engine.get_analysis(fen_before, multipv=1)
         cp_before = int(before_eval.get("evaluation_cp") or 0)
@@ -180,14 +225,41 @@ def _build_game_review_payload(game_obj: Game, user) -> tuple[dict, SavedAnalysi
             cp_gain = cp_before - cp_after
             potential_gain = cp_loss
 
+        # Apply Book detection now that we have CP loss
+        if in_book and ply_index <= 20:
+            info = _fetch_opening_info(session, fen_before, move_uci=move_uci)
+            if info.get("failed"):
+                # Offline Fallback if Lichess is rate-limited: 
+                # First 3 full moves (6 plies) that don't lose advantage are "book"
+                if ply_index <= 6 and cp_loss <= 25:
+                    is_book = True
+                else:
+                    in_book = False
+            else:
+                if info["is_theory"]:
+                    is_book = True
+                    if info["name"]:
+                        opening_name = info["name"]
+                else:
+                    in_book = False
+        else:
+            in_book = False
+
         category = classify_move(
             cp_loss=cp_loss,
+
             cp_gain=cp_gain,
             potential_gain=potential_gain,
             move_uci=move_uci,
             best_move_uci=best_move_uci,
             board_before=board,
+            is_book=is_book,
         )
+
+        # Book moves don't count towards accuracy loss
+        if category == "book":
+            cp_loss = 0
+            cp_gain = 0
 
         best_san = "(none)"
         if best_move_uci:
@@ -287,18 +359,27 @@ def _build_game_review_payload(game_obj: Game, user) -> tuple[dict, SavedAnalysi
     analysis_record.best_count = int(total_counts["best"])
     analysis_record.excelllent_count = int(total_counts["excellent"])
     analysis_record.good_count = int(total_counts["good"])
+    analysis_record.book_count = int(total_counts["book"])
     analysis_record.inaccuracy_count = int(total_counts["inaccuracy"])
     analysis_record.miss_count = int(total_counts["miss"])
     analysis_record.mistake_count = int(total_counts["mistake"])
     analysis_record.blunder_count = int(total_counts["blunder"])
     analysis_record.save()
 
+    # Identify user side and save accuracy to Game model
     username_guess = (user.chess_username or user.username or "").lower()
     user_side = "white"
+    user_acc = white_accuracy
     if (game_obj.black_player or "").lower() == username_guess:
         user_side = "black"
+        user_acc = black_accuracy
     elif (game_obj.white_player or "").lower() == username_guess:
         user_side = "white"
+        user_acc = white_accuracy
+
+    game_obj.accuracy = user_acc
+    game_obj.is_analyzed = True
+    game_obj.save(update_fields=['accuracy', 'is_analyzed'])
 
     summary = {
         "players": {
@@ -325,6 +406,7 @@ def _build_game_review_payload(game_obj: Game, user) -> tuple[dict, SavedAnalysi
         },
         "phase_accuracy": phase_accuracy,
         "total_accuracy": round((white_accuracy + black_accuracy) / 2.0, 1),
+        "opening_name": opening_name,
     }
 
     payload = {
@@ -508,6 +590,7 @@ def latest_saved_review(request, game_id: int):
                 "best": record.best_count,
                 "excellent": record.excelllent_count,
                 "good": record.good_count,
+                "book": record.book_count,
                 "inaccuracy": record.inaccuracy_count,
                 "miss": record.miss_count,
                 "mistake": record.mistake_count,

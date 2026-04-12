@@ -4,17 +4,22 @@
 {% block title %}Game Review{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{% static 'css/analysis.css' %}">
+<link rel="stylesheet" href="{% static 'css/analysis.css' %}?v=2.0.2">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
 <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
 {% endblock %}
 
 {% block content %}
-<div class="review-shell" data-game-id="{{ game.id }}" data-username="{{ user.username }}">
-    <section class="summary-panel">
+<div class="review-shell" data-game-id="{{ game.id }}" data-username="{{ user.username }}" data-finish-url="{% url 'game' %}">
+    <section class="summary-panel" id="summaryPanel">
         <div class="summary-header">
             <h2><i class="bi bi-star-fill"></i> Game Review</h2>
-            <p id="summaryText">Generating full review with Azure Stockfish...</p>
+            <p id="summaryText">Analyzing Your Game...</p>
+            <p id="openingInfo" class="opening-name-display"></p>
+        </div>
+
+        <div class="progress-container">
+            <div id="reviewProgress" class="progress-bar-fill"></div>
         </div>
 
         <div class="summary-chart-card">
@@ -26,31 +31,40 @@
                 <h3 id="whiteName">{{ game.white_player }}</h3>
                 <p class="muted">White</p>
                 <div class="accuracy" id="whiteAcc">--</div>
+                <div class="player-meta">
+                    <div class="player-meta-item">
+                        <span class="player-meta-label">Rating</span>
+                        <strong id="whiteRating">--</strong>
+                    </div>
+                    <div class="player-meta-item">
+                        <span class="player-meta-label">Game Rating</span>
+                        <strong id="whiteGameRating">--</strong>
+                    </div>
+                </div>
             </article>
             <article class="player-card" id="blackCard">
                 <h3 id="blackName">{{ game.black_player }}</h3>
                 <p class="muted">Black</p>
                 <div class="accuracy" id="blackAcc">--</div>
+                <div class="player-meta">
+                    <div class="player-meta-item">
+                        <span class="player-meta-label">Rating</span>
+                        <strong id="blackRating">--</strong>
+                    </div>
+                    <div class="player-meta-item">
+                        <span class="player-meta-label">Game Rating</span>
+                        <strong id="blackGameRating">--</strong>
+                    </div>
+                </div>
             </article>
-        </div>
-
-        <div class="metric-row">
-            <div class="metric-box">
-                <span>Total Accuracy</span>
-                <strong id="totalAcc">--</strong>
-            </div>
-            <div class="metric-box">
-                <span>Game Rating</span>
-                <strong><span id="whiteRatingEst">--</span> / <span id="blackRatingEst">--</span></strong>
-            </div>
         </div>
 
         <div class="breakdown-card">
             <h4>Move Breakdown</h4>
             <div class="breakdown-head">
-                <span>Category</span>
-                <span>White</span>
-                <span>Black</span>
+                <span class="col-lbl">Category</span>
+                <span class="col-val">White</span>
+                <span class="col-val">Black</span>
             </div>
             <div id="breakdownRows"></div>
         </div>
@@ -58,15 +72,26 @@
         <div class="phase-card">
             <h4>Phase Accuracy</h4>
             <div class="phase-grid">
-                <div>Opening</div>
-                <div id="phaseOpeningWhite">--</div>
-                <div id="phaseOpeningBlack">--</div>
-                <div>Middlegame</div>
-                <div id="phaseMiddleWhite">--</div>
-                <div id="phaseMiddleBlack">--</div>
-                <div>Endgame</div>
-                <div id="phaseEndWhite">--</div>
-                <div id="phaseEndBlack">--</div>
+                <div class="phase-head">
+                    <span class="col-lbl">Phase</span>
+                    <span class="col-val">White</span>
+                    <span class="col-val">Black</span>
+                </div>
+                <div class="phase-row">
+                    <span class="muted">Opening</span>
+                    <span id="phaseOpeningWhite" class="phase-value">--</span>
+                    <span id="phaseOpeningBlack" class="phase-value">--</span>
+                </div>
+                <div class="phase-row">
+                    <span class="muted">Middlegame</span>
+                    <span id="phaseMiddleWhite" class="phase-value">--</span>
+                    <span id="phaseMiddleBlack" class="phase-value">--</span>
+                </div>
+                <div class="phase-row">
+                    <span class="muted">Endgame</span>
+                    <span id="phaseEndWhite" class="phase-value">--</span>
+                    <span id="phaseEndBlack" class="phase-value">--</span>
+                </div>
             </div>
         </div>
 
@@ -98,7 +123,10 @@
                 <p id="moveDesc">Select a move to view explanation and follow-up line.</p>
                 <p><strong>Best Move:</strong> <span id="bestMove">--</span></p>
                 <p><strong>Follow-up:</strong> <span id="followLine">--</span></p>
-                <button id="resetLineBtn" type="button" hidden>Back to Main Line</button>
+                <div class="move-card-actions">
+                    <button id="resetLineBtn" type="button" hidden>Back to Main Line</button>
+                    <button id="finishReviewBtn" class="finish-btn" type="button">Finish Review</button>
+                </div>
             </div>
 
             <div class="move-list-card">
@@ -115,5 +143,5 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
 <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="{% static 'js/analysis.js' %}"></script>
+<script src="{% static 'js/analysis.js' %}?v=2.0.1"></script>
 {% endblock %}

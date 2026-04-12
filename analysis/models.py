@@ -18,6 +18,7 @@ class SavedAnalysis(models.Model):
     best_count = models.IntegerField(default=0)
     excelllent_count = models.IntegerField(default=0)
     good_count = models.IntegerField(default=0)
+    book_count = models.IntegerField(default=0)
     inaccuracy_count = models.IntegerField(default=0)
     miss_count = models.IntegerField(default=0)
     mistake_count = models.IntegerField(default=0)

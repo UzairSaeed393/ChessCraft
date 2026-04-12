@@ -159,6 +159,24 @@ body {
     font-size: 0.85rem; 
 }
 
+.accuracy-badge {
+    background: var(--primary);
+    color: var(--lighttext);
+    padding: 3px 12px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    box-shadow: 0 4px 10px rgba(10, 101, 58, 0.15);
+    margin-left: 8px;
+}
+
+.accuracy-badge i {
+    font-size: 0.85rem;
+}
+
 .games-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
