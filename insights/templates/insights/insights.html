@@ -12,7 +12,7 @@
 
     <!-- Header -->
     <div class="ins-header">
-        <h1><i class="bi bi-bar-chart-line-fill" style="font-size:1.6rem;-webkit-text-fill-color:#81b64c"></i> Player Insights</h1>
+        <h1><i class="bi bi-bar-chart-line-fill" style="font-size:1.6rem; color: #084f2d"></i> Player Insights</h1>
         <p>Deep analytics from your analyzed games</p>
     </div>
 
@@ -32,10 +32,35 @@
     </div>
     {% endif %}
 
-    <!-- Loading spinner -->
+    <!-- Analysis & Sync Controls -->
+    <div class="analysis-controls mb-4">
+        <div class="d-flex align-items-center gap-3">
+            <button id="btnSyncRecent" class="sync-btn" title="Analyze up to 20 un-analyzed games from the last 7 days">
+                <i class="bi bi-lightning-charge-fill"></i> Sync & Analyze Weekly
+            </button>
+            <button id="btnSyncMonth" class="sync-btn secondary" title="Analyze un-analyzed games from this month">
+                <i class="bi bi-calendar-check-fill"></i> Analyze This Month
+            </button>
+            <div id="serverStatus" class="server-status">
+                <span class="status-dot free"></span>
+                <span class="status-text">Engine: Ready</span>
+            </div>
+        </div>
+        <div id="analysisProgress" class="analysis-pbar-container mt-2" style="display:none">
+            <div class="analysis-pbar-description">Please wait, your games are being analyzed to generate your insights...</div>
+            <div class="analysis-pbar-track">
+                <div class="analysis-pbar-fill"></div>
+            </div>
+            <span class="pbar-text">Processing batch...</span>
+        </div>
+    </div>
+
+    <!-- Global Loading spinner (deprecated for tiered loading, but kept for main state) -->
     <div id="insLoading" class="ins-loading" style="display:none">
-        <div class="ins-spinner"></div>
-        Loading your insights…
+        <div class="ins-radar-wrap">
+            <div class="ins-radar"></div>
+        </div>
+        <div class="mt-3">Preparing your dashboard...</div>
     </div>
 
     <!-- Main content (hidden until loaded) -->
@@ -58,6 +83,10 @@
                 <span class="stat-icon">🏆</span>
                 <div class="stat-value" id="statWinRate">--</div>
                 <div class="stat-label">Win Rate</div>
+                <div class="stat-sub-info">
+                    <span id="winRateWhite" class="mini-w">W: --</span> | 
+                    <span id="winRateBlack" class="mini-l">B: --</span>
+                </div>
             </div>
             <div class="stat-card">
                 <span class="stat-icon">⭐</span>
@@ -107,16 +136,32 @@
 
         <!-- Move breakdown + Phase performance -->
         <div class="ins-two-col" style="margin-bottom:20px">
-            <div class="ins-card">
+            <div class="ins-card slow-load" id="cardBreakdown">
                 <div class="ins-section-title"><i class="bi bi-pie-chart-fill"></i>Move Breakdown</div>
-                <div class="chart-wrap" style="height:200px">
+                <div class="analytical-loader">
+                    <div class="radar-scan"></div>
+                    <div class="loader-text">Analyzing Move Classification...</div>
+                </div>
+                <div class="chart-wrap content-node" style="height:200px; display:none">
                     <canvas id="breakdownChart"></canvas>
                 </div>
+                <div class="empty-state-node" style="display:none">
+                    <div class="empty-icon">📊</div>
+                    <p>Analyze more games to unlock this insight!</p>
+                </div>
             </div>
-            <div class="ins-card">
+            <div class="ins-card slow-load" id="cardPhases">
                 <div class="ins-section-title"><i class="bi bi-layers-fill"></i>Phase Performance</div>
-                <div class="chart-wrap" style="height:200px">
+                <div class="analytical-loader">
+                    <div class="radar-scan"></div>
+                    <div class="loader-text">Calculating Phase Accuracies...</div>
+                </div>
+                <div class="chart-wrap content-node" style="height:200px; display:none">
                     <canvas id="phaseChart"></canvas>
+                </div>
+                <div class="empty-state-node" style="display:none">
+                    <div class="empty-icon">🧩</div>
+                    <p>Analyze 5+ games to see phase trends.</p>
                 </div>
             </div>
         </div>
@@ -125,8 +170,8 @@
         <div class="ins-card" style="margin-bottom:20px">
             <div class="ins-section-title"><i class="bi bi-book-fill"></i>Opening Insights</div>
             <div class="color-tabs">
-                <button class="color-tab active" id="tabWhite" onclick="setOpeningColor('white')">♙ As White</button>
-                <button class="color-tab" id="tabBlack" onclick="setOpeningColor('black')">♟ As Black</button>
+                <button class="color-tab active" id="tabWhite">♙ As White</button>
+                <button class="color-tab" id="tabBlack">♟ As Black</button>
             </div>
             <div id="openingsTableWrap">
                 <table class="openings-table">
@@ -145,9 +190,16 @@
         </div>
 
         <!-- Coaching Tips -->
-        <div class="ins-card">
+        <div class="ins-card slow-load" id="cardTips">
             <div class="ins-section-title"><i class="bi bi-robot"></i>AI Coaching Tips</div>
-            <ul class="tips-list" id="tipsList"></ul>
+            <div class="analytical-loader">
+                <div class="radar-scan"></div>
+                <div class="loader-text">Generating Coaching Tips...</div>
+            </div>
+            <ul class="tips-list content-node" id="tipsList" style="display:none"></ul>
+            <div class="empty-state-node" style="display:none">
+                <p>Keep analyzing your games regularly to unlock personalized AI coaching tips.</p>
+            </div>
         </div>
 
     </div><!-- end #insContent -->

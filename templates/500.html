@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Server Error (500) — ChessCraft{% endblock %}
+
+{% block content %}
+<div class="error-page-container" style="text-align: center; padding: 80px 20px; color: #e8e6e3; background: #181716; min-height: 70vh; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+    <div class="error-icon" style="font-size: 5rem; color: #e84040; margin-bottom: 20px;">
+        <i class="bi bi-exclamation-triangle-fill"></i>
+    </div>
+    <h1 style="font-weight: 800; font-size: 3.5rem; margin-bottom: 10px; background: linear-gradient(135deg, #fff 30%, #e84040 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">500</h1>
+    <h2 style="font-weight: 600; margin-bottom: 20px; color: #8a8480;">Oops! Something went wrong</h2>
+    <p style="max-width: 500px; line-height: 1.6; color: #8a8480;">We've encountered an internal error. Our team has been notified, but please feel free to reach out to ensure it's fixed quickly!</p>
+    
+    <div class="report-box" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); padding: 20px; border-radius: 12px; margin-top: 30px; width: 100%; max-width: 450px;">
+        <p style="margin-bottom: 10px; font-weight: 500;">Report this to ensure a quick fix:</p>
+        <div class="d-flex flex-column gap-2">
+            <a href="mailto:chesscraftinfo@gmail.com" style="color: #81b64c; text-decoration: none; font-weight: 600;"><i class="bi bi-envelope-fill me-2"></i>chesscraftinfo@gmail.com</a>
+            <a href="{% url 'contact' %}" style="color: #81b64c; text-decoration: none; font-weight: 600;"><i class="bi bi-chat-dots-fill me-2"></i>Contact Us Page</a>
+        </div>
+    </div>
+
+    <a href="{% url 'home' %}" class="btn mt-4" style="background: #333; color: white; padding: 10px 30px; border-radius: 8px; font-weight: 700;">Back to Home</a>
+</div>
+{% endblock %}

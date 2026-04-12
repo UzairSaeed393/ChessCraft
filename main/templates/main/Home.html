@@ -1,19 +1,99 @@
 {% extends 'base.html' %}
 {% load static %}
 
-{% block title %}Home{% endblock %}
+{% block title %}ChessCraft - Home {% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.css">
+<style>
+    /* Ensure the board squares are visible and distinct */
+    .board-wrapper {
+        background: #2a2927;
+        padding: 5px;
+    }
+    #homeBoard {
+        width: 100%;
+        height: auto;
+    }
+    /* Fix for chessboard.js white squares sometimes being invisible on light backgrounds */
+    .white-1e1d7 { background-color: #f0d9b5 !important; color: #b58863; }
+    .black-3c85d { background-color: #b58863 !important; color: #f0d9b5; }
+</style>
 <link rel="stylesheet" href="{% static 'css/home.css' %}">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
 {% endblock %}
 
 {% block content %}
-<div class="homecontainer">
+<div class="home-shell">
+    
+    <!-- Hero Section -->
+    <div class="hero">
+        <h1 class="hero-title">Master Your <span class="hero-highlight">Chess Game</span></h1>
+        <p class="hero-subtitle">Play against our adaptable AI, import your games, and get Grandmaster-level insights to improve faster.</p>
+    </div>
 
+    <!-- Play vs AI Section -->
+    <div class="play-section">
+        
+        <!-- Interactive Chessboard -->
+        <div class="board-wrapper">
+            <div id="homeBoard"></div>
+        </div>
+
+        <!-- AI Challenge Sidebar -->
+        <div class="ai-controls">
+            <h2 class="controls-title"><i class="bi bi-robot"></i> Challenge AI</h2>
+            
+            <div class="control-group">
+                <label>Opponent Strength (Elo)</label>
+                <div class="elo-display"><span id="eloValue">1500</span></div>
+                <input type="range" id="eloSlider" min="600" max="3000" step="100" value="1500" class="elo-slider">
+                <div class="elo-labels">
+                    <span>Beginner</span>
+                    <span>Grandmaster</span>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <label>Play As</label>
+                <div class="color-toggle">
+                    <button class="color-btn active" data-color="white" id="btnPlayWhite">♙ White</button>
+                    <button class="color-btn" data-color="black" id="btnPlayBlack">♟ Black</button>
+                </div>
+            </div>
+
+            <div class="status-box" id="gameStatus">
+                Welcome! Make a move to start.
+            </div>
+
+            <button class="btn-new-game" id="btnNewGame"><i class="bi bi-arrow-repeat"></i> New Game</button>
+        </div>
+    </div><!-- end play-section -->
+
+    <!-- Quick Features Section -->
+    <div class="features-grid">
+        <a href="{% url 'game' %}" class="feature-card">
+            <div class="feature-icon"><i class="bi bi-cloud-arrow-down-fill"></i></div>
+            <h3>Import Games</h3>
+            <p>Fetch your games from Chess.com with one click.</p>
+        </a>
+        <a href="{% url 'insights_home' %}" class="feature-card highlight">
+            <div class="feature-icon" style="color:var(--accent2)"><i class="bi bi-bar-chart-line-fill"></i></div>
+            <h3>Player Insights</h3>
+            <p>Discover your strengths, weaknesses, and win-rates.</p>
+        </a>
+        
+    </div>
 
 </div>
 {% endblock %}
+
 {% block extra_js %}
+<!-- Include jQuery (Required for chessboardjs) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+<!-- Include chess.js library for rule validation -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+<!-- Include Chessboard.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.js"></script>
 <script src="{% static 'js/home.js' %}"></script>
 {% endblock %}

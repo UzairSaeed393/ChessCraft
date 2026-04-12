@@ -11,6 +11,9 @@ from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_GET, require_POST
+from django.utils import timezone
+from datetime import timedelta
+from ChessCraft.utils import api_error_handler
 
 from user.models import Game
 
@@ -161,7 +164,7 @@ def _parse_pgn_or_raise(pgn_text: str):
     return game
 
 
-def _build_game_review_payload(game_obj: Game, user) -> tuple[dict, SavedAnalysis]:
+def _build_game_review_payload(game_obj, user, priority=0) -> tuple[dict, SavedAnalysis]:
     engine = StockfishManager()
     parsed_game = _parse_pgn_or_raise(game_obj.pgn or "")
 
@@ -178,6 +181,9 @@ def _build_game_review_payload(game_obj: Game, user) -> tuple[dict, SavedAnalysi
         "black": _empty_side_stats(),
     }
 
+    # Before creating new SavedAnalysis, delete previous ones for this game to prevent duplicates in insights
+    SavedAnalysis.objects.filter(user=user, game=game_obj).delete()
+
     analysis_record = SavedAnalysis.objects.create(
         user=user,
         game=game_obj,
@@ -186,6 +192,17 @@ def _build_game_review_payload(game_obj: Game, user) -> tuple[dict, SavedAnalysi
 
     move_rows = []
     mainline_moves = list(parsed_game.mainline_moves())
+
+    # 1. Collect all FENs for batch processing
+    all_fens = [start_fen]
+    temp_board = parsed_game.board()
+    for move in mainline_moves:
+        temp_board.push(move)
+        all_fens.append(temp_board.fen())
+
+    # 2. Send all FENs to engine in a single batch request
+    print(f"Batch analyzing {len(all_fens)} positions with priority {priority}...")
+    batch_results = engine.analyze_batch(all_fens, multipv=1, priority=priority)
 
     session = requests.Session()
     # Add a custom User-Agent to avoid Lichess blocking the default python-requests UA
@@ -197,11 +214,10 @@ def _build_game_review_payload(game_obj: Game, user) -> tuple[dict, SavedAnalysi
         side = "white" if board.turn else "black"
         phase = _phase_for_position(board, ply_index)
 
-        # Defer Lichess processing until AFTER CP loss is calculated 
-        # so we can use CP loss for the offline fallback if Lichess fails.
         is_book = False
 
-        before_eval = engine.get_analysis(fen_before, multipv=1)
+        # Retrieve cached batch results (0-indexed logic)
+        before_eval = batch_results[ply_index - 1]
         cp_before = int(before_eval.get("evaluation_cp") or 0)
         best_move_uci = before_eval.get("best_move") or ""
         best_pv_uci = before_eval.get("pv") or []
@@ -213,7 +229,7 @@ def _build_game_review_payload(game_obj: Game, user) -> tuple[dict, SavedAnalysi
         after_board.push(move)
         fen_after = after_board.fen()
 
-        after_eval = engine.get_analysis(fen_after, multipv=1)
+        after_eval = batch_results[ply_index]
         cp_after = int(after_eval.get("evaluation_cp") or 0)
         follow_pv_uci = after_eval.get("pv") or []
 
@@ -367,7 +383,7 @@ def _build_game_review_payload(game_obj: Game, user) -> tuple[dict, SavedAnalysi
     analysis_record.brilliant_count = int(total_counts["brilliant"])
     analysis_record.great_count = int(total_counts["great"])
     analysis_record.best_count = int(total_counts["best"])
-    analysis_record.excelllent_count = int(total_counts["excellent"])
+    analysis_record.excellent_count = int(total_counts["excellent"])
     analysis_record.good_count = int(total_counts["good"])
     analysis_record.book_count = int(total_counts["book"])
     analysis_record.inaccuracy_count = int(total_counts["inaccuracy"])
@@ -439,6 +455,10 @@ def _build_game_review_payload(game_obj: Game, user) -> tuple[dict, SavedAnalysi
         "summary": summary,
         "moves": moves_payload,
     }
+    
+    analysis_record.full_payload = payload
+    analysis_record.save(update_fields=["full_payload"])
+    
     return payload, analysis_record
 
 
@@ -459,6 +479,7 @@ def analysis_dashboard(request, game_id: int):
 
 @login_required
 @require_POST
+@api_error_handler
 def run_full_game_review(request):
     body = _json_body(request)
     game_id = body.get("game_id")
@@ -469,15 +490,19 @@ def run_full_game_review(request):
     if not game_obj.pgn:
         return JsonResponse({"error": "This game has no PGN to analyze"}, status=400)
 
-    try:
-        payload, _record = _build_game_review_payload(game_obj, request.user)
-        return JsonResponse({"status": "success", **payload})
-    except Exception as exc:
-        return JsonResponse({"error": str(exc)}, status=500)
+    # Check if we already have a saved full payload
+    existing_record = SavedAnalysis.objects.filter(user=request.user, game=game_obj).order_by("-id").first()
+    if existing_record and existing_record.full_payload:
+        return JsonResponse({"status": "success", **existing_record.full_payload})
+
+    # Priority 0: Manual user-initiated review gets top priority in the queue
+    payload, _record = _build_game_review_payload(game_obj, request.user, priority=0)
+    return JsonResponse({"status": "success", **payload})
 
 
 @login_required
 @require_POST
+@api_error_handler
 def analyze_single_position(request):
     body = _json_body(request)
     fen = (body.get("fen") or "").strip()
@@ -485,16 +510,14 @@ def analyze_single_position(request):
         return JsonResponse({"error": "fen is required"}, status=400)
 
     depth = body.get("depth")
-    try:
-        manager = StockfishManager()
-        result = manager.get_analysis(fen, depth=depth, multipv=1)
-        return JsonResponse({"status": "success", **result})
-    except Exception as exc:
-        return JsonResponse({"error": str(exc)}, status=500)
+    manager = StockfishManager()
+    result = manager.get_analysis(fen, depth=depth, multipv=1, priority=0)
+    return JsonResponse({"status": "success", **result})
 
 
 @login_required
 @require_POST
+@api_error_handler
 def analyze_variation(request):
     body = _json_body(request)
     fen = (body.get("fen") or "").strip()
@@ -512,16 +535,15 @@ def analyze_variation(request):
         manager = StockfishManager()
         side = "white" if board.turn else "black"
 
-        before_eval = manager.get_analysis(fen, multipv=1)
+        before_eval = manager.get_analysis(fen, multipv=1, priority=0)
         cp_before = int(before_eval.get("evaluation_cp") or 0)
         best_move_uci = before_eval.get("best_move") or ""
         best_line = _to_san_line(fen, before_eval.get("pv") or [])
 
-        move_san = board.san(move)
         board.push(move)
         after_fen = board.fen()
 
-        after_eval = manager.get_analysis(after_fen, multipv=1)
+        after_eval = manager.get_analysis(after_fen, multipv=1, priority=0)
         cp_after = int(after_eval.get("evaluation_cp") or 0)
         follow_line = _to_san_line(after_fen, after_eval.get("pv") or [])
 
@@ -584,11 +606,15 @@ def analyze_variation(request):
 
 @login_required
 @require_GET
+@api_error_handler
 def latest_saved_review(request, game_id: int):
     game_obj = get_object_or_404(Game, pk=game_id, user=request.user)
     record = SavedAnalysis.objects.filter(user=request.user, pgn_data=game_obj.pgn or "").order_by("-id").first()
     if not record:
         return JsonResponse({"status": "empty"})
+
+    if record.full_payload:
+        return JsonResponse({"status": "success", **record.full_payload})
 
     return JsonResponse(
         {
@@ -602,7 +628,7 @@ def latest_saved_review(request, game_id: int):
                 "brilliant": record.brilliant_count,
                 "great": record.great_count,
                 "best": record.best_count,
-                "excellent": record.excelllent_count,
+                "excellent": record.excellent_count,
                 "good": record.good_count,
                 "book": record.book_count,
                 "inaccuracy": record.inaccuracy_count,
@@ -612,3 +638,72 @@ def latest_saved_review(request, game_id: int):
             },
         }
     )
+
+
+@login_required
+@require_POST
+@api_error_handler
+def api_analyze_period(request):
+    """
+    Finds and analyzes up to 20 un-analyzed games for a period (week/month).
+    Uses server health check to decide batch size.
+    """
+    data = _json_body(request)
+    period = data.get("period", "week")  # week or month
+    chess_username = data.get("username", "").strip()
+
+    if not chess_username:
+        return JsonResponse({"error": "No chess username provided"}, status=400)
+
+    now = timezone.now()
+    if period == "month":
+        start_date = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    else:
+        # Default: current week
+        start_date = now - timedelta(days=7)
+
+    # 1. Find un-analyzed games
+    games_to_analyze = Game.objects.filter(
+        user=request.user,
+        chess_username_at_time__iexact=chess_username,
+        is_analyzed=False,
+        date_played__gte=start_date
+    ).order_by("-date_played")
+
+    if not games_to_analyze.exists():
+        return JsonResponse({"status": "no_games", "message": "All games in this period are already analyzed."})
+
+    # 2. Check Server Health to decide limit
+    manager = StockfishManager()
+    health = manager.get_health()
+    active_tasks = health.get("active_tasks", 0)
+    
+    # User's limit request: 20 max, 10 if busy
+    limit = 20 if active_tasks == 0 else 10
+    
+    selected_games = games_to_analyze[:limit]
+    
+    # 3. Process the batch
+    results = []
+    for game in selected_games:
+        try:
+            # Priority 1: This is an automatic/periodic batch sync
+            _build_game_review_payload(game, request.user, priority=1)
+            results.append({"id": game.id, "status": "success"})
+        except Exception as e:
+            results.append({"id": game.id, "status": "error", "message": str(e)})
+
+    return JsonResponse({
+        "status": "complete",
+        "games_processed": len(results),
+        "results": results,
+        "server_busy": active_tasks > 0,
+        "limit_used": limit
+    })
+
+
+@login_required
+def api_engine_health(request):
+    """Bridge to check remote engine health from frontend."""
+    manager = StockfishManager()
+    return JsonResponse(manager.get_health())

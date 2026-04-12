@@ -3,23 +3,43 @@ from __future__ import annotations
 import chess.pgn
 import io
 from collections import defaultdict
+from functools import wraps
 
 from django.contrib.auth.decorators import login_required
-from django.db.models import Avg, Count, Sum, Q
+from django.db.models import Avg, Count, Sum, Q, Max
 from django.http import JsonResponse
 from django.shortcuts import render
 
 from analysis.models import SavedAnalysis
 from user.models import Game
 
+def api_error_handler(view_func):
+    """
+    Decorator to catch all exceptions in API views and return a 
+    standardized JSON error response with reporting instructions.
+    """
+    @wraps(view_func)
+    def _wrapped_view(request, *args, **kwargs):
+        try:
+            return view_func(request, *args, **kwargs)
+        except Exception as e:
+            return JsonResponse({
+                'error': 'Internal Error',
+                'message': 'Oops! Something went wrong while processing your insights. Please report this to chesscraftinfo@gmail.com or via the Contact page.',
+                'details': str(e)
+            }, status=500)
+    return _wrapped_view
 
 def _get_analyses(request, username: str):
-    """Return SavedAnalysis queryset for a username.
-    Includes both FK-linked records (new) AND legacy records with no game FK.
-    """
+    """Return SavedAnalysis queryset for a username, preventing duplicates."""
+    latest_ids = SavedAnalysis.objects.filter(
+        user=request.user, game__chess_username_at_time__iexact=username
+    ).values('game').annotate(max_id=Max('id')).values_list('max_id', flat=True)
+
     return SavedAnalysis.objects.filter(
-        Q(user=request.user, game__chess_username_at_time__iexact=username) |
-        Q(user=request.user, game__isnull=True)
+        id__in=latest_ids
+    ).exclude(
+        game__time_control__in=['60', '60+1', '60+2', '30', '120', '120+1']
     ).select_related('game')
 
 
@@ -31,7 +51,6 @@ def _opening_from_pgn(pgn_text: str) -> str | None:
             for key in ('Opening', 'ECOUrl', 'Variant'):
                 val = game.headers.get(key, '')
                 if val and val not in ('?', '-', ''):
-                    # ECOUrl is like ".../openings/Italian-Game" — extract the name
                     if key == 'ECOUrl':
                         val = val.rstrip('/').split('/')[-1].replace('-', ' ')
                     return val
@@ -86,6 +105,7 @@ def insights_home(request):
 
 
 @login_required
+@api_error_handler
 def api_summary(request):
     username = request.GET.get('username', '').strip()
     if not username:
@@ -99,7 +119,7 @@ def api_summary(request):
         tot_brilliant=Sum('brilliant_count'),
         tot_great=Sum('great_count'),
         tot_best=Sum('best_count'),
-        tot_excellent=Sum('excelllent_count'),
+        tot_excellent=Sum('excellent_count'),
         tot_good=Sum('good_count'),
         tot_book=Sum('book_count'),
         tot_inaccuracy=Sum('inaccuracy_count'),
@@ -119,35 +139,42 @@ def api_summary(request):
         agg['tot_mistake'] or 0, agg['tot_blunder'] or 0,
     ])
 
-    # Win/draw/loss from Game model
-    games_qs = Game.objects.filter(user=request.user, chess_username_at_time__iexact=username)
+    games_qs = Game.objects.filter(user=request.user, chess_username_at_time__iexact=username).exclude(
+        time_control__in=['60', '60+1', '60+2', '30', '120', '120+1']
+    )
+    white_wins = white_draws = white_losses = 0
+    black_wins = black_draws = black_losses = 0
     wins = draws = losses = 0
     best_acc = worst_acc = None
     best_game_id = worst_game_id = None
+    
+    player_lower = username.lower()
     for g in games_qs:
-        player = username.lower()
-        if g.white_player and g.white_player.lower() == player:
+        color = None
+        if g.white_player and g.white_player.lower() == player_lower:
             color = 'white'
-        elif g.black_player and g.black_player.lower() == player:
+        elif g.black_player and g.black_player.lower() == player_lower:
             color = 'black'
-        else:
-            color = None
+            
         result = g.result or ''
-        # Results stored as 'Win', 'Draw', 'Loss' by user/utils.py
-        if result == 'Win': wins += 1
-        elif result == 'Loss': losses += 1
-        else: draws += 1
-        # Best / worst game by accuracy
+        if result == 'Win':
+            wins += 1
+            if color == 'white': white_wins += 1
+            elif color == 'black': black_wins += 1
+        elif result == 'Loss':
+            losses += 1
+            if color == 'white': white_losses += 1
+            elif color == 'black': black_losses += 1
+        else:
+            draws += 1
+            if color == 'white': white_draws += 1
+            elif color == 'black': black_draws += 1
+            
         if g.accuracy is not None:
             if best_acc is None or g.accuracy > best_acc:
                 best_acc = g.accuracy; best_game_id = g.id
             if worst_acc is None or g.accuracy < worst_acc:
                 worst_acc = g.accuracy; worst_game_id = g.id
-
-    # Phase averages across all analyses
-    phase_data = defaultdict(list)
-    for a in analyses:
-        pass  # Phase data not stored per-record yet; will compute from avg_accuracy proxy
 
     phase_avg = {
         'opening': round(avg_accuracy * 1.05, 1),
@@ -173,6 +200,14 @@ def api_summary(request):
         'draws': draws,
         'losses': losses,
         'win_rate': round(wins / max(wins + draws + losses, 1) * 100, 1),
+        'white_stats': {
+            'wins': white_wins, 'draws': white_draws, 'losses': white_losses,
+            'win_rate': round(white_wins / max(white_wins + white_draws + white_losses, 1) * 100, 1) if (white_wins+white_draws+white_losses) > 0 else 0
+        },
+        'black_stats': {
+            'wins': black_wins, 'draws': black_draws, 'losses': black_losses,
+            'win_rate': round(black_wins / max(black_wins + black_draws + black_losses, 1) * 100, 1) if (black_wins+black_draws+black_losses) > 0 else 0
+        },
         'best_game_id': best_game_id,
         'best_accuracy': round(best_acc, 1) if best_acc else None,
         'worst_game_id': worst_game_id,
@@ -194,6 +229,7 @@ def api_summary(request):
 
 
 @login_required
+@api_error_handler
 def api_trend(request):
     username = request.GET.get('username', '').strip()
     if not username:
@@ -203,7 +239,6 @@ def api_trend(request):
     data = []
     for a in analyses:
         avg = round((a.white_accuracy + a.black_accuracy) / 2, 1)
-        # Get opening from saved field, or fallback to PGN header
         opening = a.opening or _opening_from_pgn(a.pgn_data) or 'Unknown'
         data.append({
             'date': a.game_date.strftime('%Y-%m-%d'),
@@ -217,6 +252,7 @@ def api_trend(request):
 
 
 @login_required
+@api_error_handler
 def api_move_breakdown(request):
     username = request.GET.get('username', '').strip()
     if not username:
@@ -226,7 +262,7 @@ def api_move_breakdown(request):
         brilliant=Sum('brilliant_count'),
         great=Sum('great_count'),
         best=Sum('best_count'),
-        excellent=Sum('excelllent_count'),
+        excellent=Sum('excellent_count'),
         good=Sum('good_count'),
         book=Sum('book_count'),
         inaccuracy=Sum('inaccuracy_count'),
@@ -238,13 +274,16 @@ def api_move_breakdown(request):
 
 
 @login_required
+@api_error_handler
 def api_openings(request):
     username = request.GET.get('username', '').strip()
     color = request.GET.get('color', 'white').lower()
     if not username:
         return JsonResponse({'error': 'username required'}, status=400)
 
-    games_qs = Game.objects.filter(user=request.user, chess_username_at_time__iexact=username)
+    games_qs = Game.objects.filter(user=request.user, chess_username_at_time__iexact=username).exclude(
+        time_control__in=['60', '60+1', '60+2', '30', '120', '120+1']
+    )
     opening_stats = defaultdict(lambda: {'games': 0, 'wins': 0, 'draws': 0, 'losses': 0, 'game_ids': []})
     player_lower = username.lower()
 
@@ -252,24 +291,19 @@ def api_openings(request):
         is_white = g.white_player and g.white_player.lower() == player_lower
         is_black = g.black_player and g.black_player.lower() == player_lower
 
-        if color == 'white' and not is_white:
-            continue
-        if color == 'black' and not is_black:
-            continue
+        if color == 'white' and not is_white: continue
+        if color == 'black' and not is_black: continue
 
-        # Get opening: use saved field, or extract from PGN
         opening = g.opening or _opening_from_pgn(g.pgn or '') or 'Unknown'
         result = g.result or ''
         st = opening_stats[opening]
         st['games'] += 1
         st['game_ids'].append(g.id)
 
-        # Results stored as 'Win'/'Draw'/'Loss' by user/utils.py
         if result == 'Win': st['wins'] += 1
         elif result == 'Loss': st['losses'] += 1
         else: st['draws'] += 1
 
-    # Sort by games played, take top 10
     sorted_openings = sorted(opening_stats.items(), key=lambda x: x[1]['games'], reverse=True)[:10]
     result_list = []
     for name, st in sorted_openings:
@@ -287,6 +321,7 @@ def api_openings(request):
 
 
 @login_required
+@api_error_handler
 def api_phases(request):
     username = request.GET.get('username', '').strip()
     if not username:
@@ -302,7 +337,10 @@ def api_phases(request):
         b_en=Avg('black_end_acc'),
     )
 
-    # Return actual phase data, defaulting to 0 if no analyzed games have phase data yet.
+    def _avg(a, b):
+        if a and b: return round((a + b) / 2, 1)
+        return round(a or b or 0, 1)
+
     return JsonResponse({
         'white': {
             'opening': round(agg['w_op'] or 0, 1),
@@ -314,4 +352,9 @@ def api_phases(request):
             'middlegame': round(agg['b_md'] or 0, 1),
             'endgame': round(agg['b_en'] or 0, 1),
         },
+        'overall': {
+            'opening': _avg(agg['w_op'], agg['b_op']),
+            'middlegame': _avg(agg['w_md'], agg['b_md']),
+            'endgame': _avg(agg['w_en'], agg['b_en']),
+        }
     })

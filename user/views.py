@@ -90,8 +90,13 @@ def game_view(request):
         return redirect('game')
 
     # GET request: Paginate games belonging to this user, newest first
+    username_filter = request.GET.get('username', '').strip()
     opening_filter = request.GET.get('opening', '').strip()
+    
     games_qs = Game.objects.filter(user=request.user).order_by('-date_played')
+    
+    if username_filter:
+        games_qs = games_qs.filter(chess_username_at_time__iexact=username_filter)
     if opening_filter:
         games_qs = games_qs.filter(opening__icontains=opening_filter)
 

@@ -36,12 +36,12 @@
             </div>
         </div>
         <div class="nav-links desktop-nav">
-            <a href="/">Home</a>
+            <a href="{% url 'home' %}">Home</a>
             <a href="{% url 'game' %}">Games</a>
-            <a href="/analysis/">Analysis</a>
-            <a href="/insights/">Insights</a>
-            <a href="/about/">About</a>
-            <a href="/contact/">Contact</a>
+            <a href="{% url 'analysis_home' %}">Analysis</a>
+            <a href="{% url 'insights_home' %}">Insights</a>
+            <a href="{% url 'about' %}">About</a>
+            <a href="{% url 'contact' %}">Contact</a>
         </div>
 
         <!-- AUTH BUTTONS -->
@@ -63,12 +63,12 @@
     <div class="sidebar" id="sidebar">
         <div class="close-btn" id="closeSidebar">&times;</div>
         <div class="nav-links mobile-nav">
-            <a href="/">Home</a>
+            <a href="{% url 'home' %}">Home</a>
             <a href="{% url 'game' %}">Games</a>
-            <a href="/analysis/">Analysis</a>
-            <a href="/insights/">Insights</a>
-            <a href="/about/">About</a>
-            <a href="/contact/">Contact</a>
+            <a href="{% url 'analysis_home' %}">Analysis</a>
+            <a href="{% url 'insights_home' %}">Insights</a>
+            <a href="{% url 'about' %}">About</a>
+            <a href="{% url 'contact' %}">Contact</a>
         </div>
     </div>
 
@@ -119,8 +119,8 @@
                     <h5 class="fw-bold mb-3">Quick Links</h5>
                     <ul class="list-unstyled">
                         <li><a href="{% url 'game' %}" class="text-white text-decoration-none">Games</a></li>
-                        <li><a href="/analysis/" class="text-white text-decoration-none">Analysis</a></li>
-                        <li><a href="/insights/" class="text-white text-decoration-none">Insights</a></li>
+                        <li><a href="{% url 'analysis_home' %}" class="text-white text-decoration-none">Analysis</a></li>
+                        <li><a href="{% url 'insights_home' %}" class="text-white text-decoration-none">Insights</a></li>
                     </ul>
                 </div>
 
@@ -128,8 +128,8 @@
                 <div class="col-md-3">
                     <h5 class="fw-bold mb-3">Support</h5>
                     <ul class="list-unstyled">
-                        <li><a href="/contact/" class="text-white text-decoration-none">Contact Us</a></li>
-                        <li><a href="/about/" class="text-white text-decoration-none">About Us</a></li>
+                        <li><a href="{% url 'contact' %}" class="text-white text-decoration-none">Contact Us</a></li>
+                        <li><a href="{% url 'about' %}" class="text-white text-decoration-none">About Us</a></li>
                     </ul>
                 </div>
 

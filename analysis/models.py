@@ -8,6 +8,8 @@ class SavedAnalysis(models.Model):
     game_date = models.DateTimeField(auto_now_add=True)
     pgn_data = models.TextField()
     
+    full_payload = models.JSONField(null=True, blank=True)
+    
     # Overall Stats
     white_accuracy = models.FloatField(default=0.0)
     black_accuracy = models.FloatField(default=0.0)
@@ -27,7 +29,7 @@ class SavedAnalysis(models.Model):
     brilliant_count = models.IntegerField(default=0)
     great_count = models.IntegerField(default=0)
     best_count = models.IntegerField(default=0)
-    excelllent_count = models.IntegerField(default=0)
+    excellent_count = models.IntegerField(default=0)
     good_count = models.IntegerField(default=0)
     book_count = models.IntegerField(default=0)
     inaccuracy_count = models.IntegerField(default=0)

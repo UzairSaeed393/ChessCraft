@@ -49,7 +49,21 @@ class StockfishManager:
         self.default_depth = int(getattr(settings, "ANALYSIS_ENGINE_DEPTH", 14))
         self.default_time = float(getattr(settings, "ANALYSIS_ENGINE_TIME", 0.18))
 
-    def get_analysis(self, fen: str, depth: int | None = None, multipv: int = 1) -> dict[str, Any]:
+    def get_health(self) -> dict[str, Any]:
+        """Check if the remote engine is busy."""
+        if self.mode != "remote" or not self.remote_url:
+            return {"status": "ok", "active_tasks": 0, "mode": self.mode}
+        
+        health_url = self.remote_url.replace("/analyze", "/health")
+        try:
+            response = requests.get(health_url, timeout=5)
+            if response.ok:
+                return response.json()
+        except:
+            pass
+        return {"status": "unknown", "active_tasks": 0}
+
+    def get_analysis(self, fen: str, depth: int | None = None, multipv: int = 1, elo_limit: int | None = None, priority: int = 1) -> dict[str, Any]:
         """Return a normalized engine payload for UI and review pipelines."""
         if not fen:
             raise ValueError("FEN is required")
@@ -57,9 +71,9 @@ class StockfishManager:
         target_depth = depth or self.default_depth
 
         if self.mode == "remote":
-            result = self._analyze_remote(fen, target_depth, multipv)
+            result = self._analyze_remote(fen, target_depth, multipv, elo_limit, priority=priority)
         else:
-            result = self._analyze_local(fen, target_depth, multipv)
+            result = self._analyze_local(fen, target_depth, multipv, elo_limit)
 
         return {
             "evaluation_cp": result.cp,
@@ -70,19 +84,42 @@ class StockfishManager:
             "mate": result.mate,
         }
 
-    def _analyze_remote(self, fen: str, depth: int, multipv: int) -> EngineResult:
+    def analyze_batch(self, fens: list[str], depth: int | None = None, multipv: int = 1, priority: int = 1) -> list[dict[str, Any]]:
+        target_depth = depth or self.default_depth
+
+        if self.mode == "remote":
+            results = self._analyze_batch_remote(fens, target_depth, multipv, priority=priority)
+        else:
+            results = self._analyze_batch_local(fens, target_depth, multipv)
+
+        output = []
+        for result in results:
+            output.append({
+                "evaluation_cp": result.cp,
+                "evaluation": result.evaluation,
+                "best_move": result.best_move,
+                "pv": result.pv,
+                "depth": result.depth,
+                "mate": result.mate,
+            })
+        return output
+
+    def _analyze_remote(self, fen: str, depth: int, multipv: int, elo_limit: int | None = None, priority: int = 1) -> EngineResult:
         if not self.remote_url:
             raise RuntimeError("ANALYSIS_ENGINE_URL is not configured for remote mode")
 
         headers = {"Content-Type": "application/json"}
         if self.remote_token:
             headers["Authorization"] = f"Bearer {self.remote_token}"
+        headers["x-priority"] = str(priority)
 
         payload = {
             "fen": fen,
             "depth": depth,
             "multipv": multipv,
         }
+        if elo_limit:
+            payload["elo"] = elo_limit
         response = requests.post(
             self.remote_url,
             json=payload,
@@ -121,7 +158,7 @@ class StockfishManager:
             mate=(int(mate) if mate is not None else None),
         )
 
-    def _analyze_local(self, fen: str, depth: int, multipv: int) -> EngineResult:
+    def _analyze_local(self, fen: str, depth: int, multipv: int, elo_limit: int | None = None) -> EngineResult:
         if not os.path.exists(self.local_path):
             raise RuntimeError(
                 f"Stockfish binary not found at '{self.local_path}'. "
@@ -131,10 +168,18 @@ class StockfishManager:
         board = chess.Board(fen)
         engine = chess.engine.SimpleEngine.popen_uci(self.local_path)
         try:
-            engine.configure({"Threads": self.local_threads, "Hash": self.local_hash})
+            config = {"Threads": self.local_threads, "Hash": self.local_hash}
+            if elo_limit:
+                config["UCI_LimitStrength"] = True
+                config["UCI_Elo"] = max(1320, min(elo_limit, 3190)) # UCI_Elo valid range is roughly 1320 to 3190
+            
+            engine.configure(config)
+            
+            # Use smaller time limits in play mode so AI responds snappily
+            time_limit = 0.5 if elo_limit else self.default_time
             info = engine.analyse(
                 board,
-                chess.engine.Limit(depth=depth, time=self.default_time),
+                chess.engine.Limit(depth=depth, time=time_limit),
                 multipv=max(1, multipv),
             )
             top = info[0] if isinstance(info, list) else info
@@ -157,6 +202,105 @@ class StockfishManager:
                 depth=depth,
                 mate=mate,
             )
+        finally:
+            engine.quit()
+
+    def _analyze_batch_remote(self, fens: list[str], depth: int, multipv: int, priority: int = 1) -> list[EngineResult]:
+        if not self.remote_url:
+            raise RuntimeError("ANALYSIS_ENGINE_URL is not configured for remote mode")
+
+        # Automatically deduce the batch URL
+        batch_url = self.remote_url.replace("/analyze", "/analyze_batch")
+        
+        headers = {"Content-Type": "application/json"}
+        if self.remote_token:
+            headers["Authorization"] = f"Bearer {self.remote_token}"
+        headers["x-priority"] = str(priority)
+
+        # Increased timeout because batch analysis for a whole game takes ~5-15 seconds
+        response = requests.post(
+            batch_url,
+            json={"fens": fens, "depth": depth, "multipv": multipv},
+            headers=headers,
+            timeout=180,
+        )
+        response.raise_for_status()
+        
+        output = []
+        for body in response.json():
+            cp = body.get("evaluation_cp")
+            mate = body.get("mate")
+            if cp is None:
+                raw_eval = body.get("evaluation")
+                if raw_eval is not None:
+                    cp = int(float(raw_eval) * 100)
+                elif mate is not None:
+                    cp = MATE_CP if int(mate) > 0 else -MATE_CP
+                else:
+                    cp = 0
+
+            best_move = (body.get("best_move") or "").strip()
+            pv = body.get("pv") or []
+            if isinstance(pv, str):
+                pv = [item for item in pv.split() if item]
+
+            if best_move and (not pv or pv[0] != best_move):
+                pv = [best_move, *pv]
+
+            result_depth = int(body.get("depth") or depth)
+            output.append(EngineResult(
+                cp=int(cp),
+                evaluation=round(int(cp) / 100.0, 2),
+                best_move=best_move,
+                pv=pv,
+                depth=result_depth,
+                mate=(int(mate) if mate is not None else None),
+            ))
+        return output
+
+    def _analyze_batch_local(self, fens: list[str], depth: int, multipv: int) -> list[EngineResult]:
+        if not os.path.exists(self.local_path):
+            raise RuntimeError(f"Stockfish binary not found at '{self.local_path}'")
+
+        engine = chess.engine.SimpleEngine.popen_uci(self.local_path)
+        try:
+            config = {"Threads": self.local_threads, "Hash": self.local_hash}
+            engine.configure(config)
+            
+            output = []
+            for fen in fens:
+                try:
+                    board = chess.Board(fen)
+                except ValueError:
+                    continue
+                
+                info = engine.analyse(
+                    board,
+                    chess.engine.Limit(depth=depth, time=self.default_time),
+                    multipv=max(1, multipv),
+                )
+                top = info[0] if isinstance(info, list) else info
+                score = top.get("score")
+                pv_moves = top.get("pv") or []
+                
+                cp = 0
+                mate = None
+                if score is not None:
+                    cp = score.pov(chess.WHITE).score(mate_score=MATE_CP) or 0
+                    mate = score.pov(chess.WHITE).mate()
+
+                best_move = pv_moves[0].uci() if pv_moves else ""
+                pv = [mv.uci() for mv in pv_moves]
+
+                output.append(EngineResult(
+                    cp=int(cp),
+                    evaluation=round(int(cp) / 100.0, 2),
+                    best_move=best_move,
+                    pv=pv,
+                    depth=depth,
+                    mate=mate,
+                ))
+            return output
         finally:
             engine.quit()
 

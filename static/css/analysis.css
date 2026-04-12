@@ -12,7 +12,7 @@
 }
 
 .review-shell {
-    max-width: 900px; /* Reduced from 1220px for better laptop view */
+    max-width: 1100px; /* Increased from 900px for a more spacious layout */
     margin: 16px auto 24px;
     color: var(--review-text);
     font-family: var(--font2);
@@ -333,8 +333,8 @@
 
 .review-stage {
     display: grid;
-    grid-template-columns: minmax(0, 1.4fr) minmax(280px, 1fr);
-    gap: 16px;
+    grid-template-columns: minmax(0, 1.6fr) minmax(300px, 1fr);
+    gap: 20px;
 }
 
 .board-column {
@@ -345,9 +345,9 @@
 
 .board-wrap {
     display: flex;
-    gap: 8px;
+    gap: 12px;
     align-items: stretch;
-    max-height: 58vh;
+    max-height: 70vh; /* Increased from 58vh */
     width: 100%;
 }
 
@@ -386,7 +386,7 @@
 .main-board {
     width: 100%;
     height: 100%;
-    max-width: 58vh;
+    max-width: 70vh; /* Increased from 58vh to make board larger on laptops */
     aspect-ratio: 1 / 1;
     border-radius: 8px;
     overflow: hidden;
@@ -622,6 +622,7 @@
     .main-board {
         flex: 1;
         min-width: 0;
-        max-width: calc(100vw - 40px); /* Leave precise room for eval bar & padding */
+        max-width: calc(100vw - 60px); /* Leave room for eval bar and container padding */
+        margin: 0 auto;
     }
 }

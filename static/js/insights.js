@@ -14,6 +14,14 @@
 
     let activeUsername = null;
     let activeColor = 'white';
+    let isAnalyzing = false;
+
+    // Helper to get CSRF token
+    function getCSRF() {
+        return document.cookie.split('; ')
+            .find(row => row.startsWith('csrftoken='))
+            ?.split('=')[1] || '';
+    }
 
     // Classification colors
     const CAT_COLORS = {
@@ -52,30 +60,172 @@
         loadAll(activeUsername);
     }
 
-    // ── Load all sections ──────────────────────────────────
+    // ── Load all sections (Tiered) ──────────────────────────
     function loadAll(username) {
+        // Start main loading
         show('insLoading');
         hide('insContent');
-        Promise.all([
+        checkHealth();
+
+        // Tier 1: Fast Data (W/L Summary, Trend, Openings)
+        const t1 = [
             fetchJSON(`/insights/api/summary/?username=${encodeURIComponent(username)}`),
             fetchJSON(`/insights/api/trend/?username=${encodeURIComponent(username)}`),
-            fetchJSON(`/insights/api/move-breakdown/?username=${encodeURIComponent(username)}`),
-            fetchJSON(`/insights/api/phases/?username=${encodeURIComponent(username)}`),
             fetchJSON(`/insights/api/openings/?username=${encodeURIComponent(username)}&color=${activeColor}`),
-        ]).then(([summary, trend, breakdown, phases, openings]) => {
+        ];
+
+        Promise.all(t1).then(([summary, trend, openings]) => {
             hide('insLoading');
             show('insContent');
+            
             renderSummary(summary);
             renderTrend(trend);
-            renderBreakdown(breakdown);
-            renderPhases(phases);
             renderOpenings(openings);
-            renderTips(summary.tips || []);
+
+            // Tier 2: Slow/Analytical Data (Move Breakdown, Phases, Tips)
+            loadAnalyticalData(username);
         }).catch(err => {
             hide('insLoading');
-            console.error('Insights load error:', err);
+            console.error('Insights Tier 1 error:', err);
+            showErrorUI(err.message);
         });
     }
+
+    function showErrorUI(msg) {
+        const content = document.getElementById('insContent');
+        if (content) {
+            content.innerHTML = `
+                <div class="error-container" style="text-align:center; padding: 50px; color: #e05555;">
+                    <h2 style="color: #fff; margin-bottom: 15px;">Dashboard Load Failed</h2>
+                    <p style="font-size: 1.1em; line-height: 1.6; color: #8a8480;">
+                        ${msg}<br>
+                        Please report this error to <a href="mailto:chesscraftinfo@gmail.com" style="color: #29d0d0;">chesscraftinfo@gmail.com</a> 
+                        or use our <a href="/contact/" style="color: #29d0d0;">Contact Page</a>.
+                    </p>
+                    <button onclick="window.location.reload()" class="action-btn" style="margin-top: 25px; background: #29d0d0; border:none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: 600;">Retry</button>
+                </div>
+            `;
+            show('insContent');
+        }
+    }
+
+    function loadAnalyticalData(username) {
+        const sections = [
+            { id: 'cardBreakdown', endpoint: 'move-breakdown', render: renderBreakdown },
+            { id: 'cardPhases', endpoint: 'phases', render: renderPhases },
+            { id: 'cardTips', endpoint: 'summary', render: (d) => renderTips(d.tips || []) }
+        ];
+
+        sections.forEach(sec => {
+            const card = document.getElementById(sec.id);
+            if (!card) return;
+
+            // Show loader in this card
+            card.querySelectorAll('.analytical-loader').forEach(l => l.style.display = 'flex');
+            card.querySelectorAll('.content-node').forEach(c => c.style.display = 'none');
+            card.querySelectorAll('.empty-state-node').forEach(e => e.style.display = 'none');
+
+            fetchJSON(`/insights/api/${sec.endpoint}/?username=${encodeURIComponent(username)}`)
+                .then(data => {
+                    card.querySelectorAll('.analytical-loader').forEach(l => l.style.display = 'none');
+                    
+                    // Check if data is "empty"
+                    const isEmpty = checkDataEmpty(sec.endpoint, data);
+                    if (isEmpty) {
+                        card.querySelectorAll('.empty-state-node').forEach(e => e.style.display = 'block');
+                    } else {
+                        card.querySelectorAll('.content-node').forEach(c => c.style.display = 'block');
+                        sec.render(data);
+                    }
+                })
+                .catch(err => {
+                    console.error(`Analytical Load Error (${sec.endpoint}):`, err);
+                    card.querySelectorAll('.analytical-loader').forEach(l => l.style.display = 'none');
+                    // Show small error hint in the card
+                    const contentNode = card.querySelector('.content-node');
+                    if (contentNode) {
+                        contentNode.style.display = 'block';
+                        contentNode.innerHTML = `<div style="color:#e05555; font-size: 0.9em; padding: 10px; text-align:center;">Failed to load. <a href="/contact/" style="color:#29d0d0">Report?</a></div>`;
+                    }
+                });
+        });
+    }
+
+    function checkDataEmpty(endpoint, data) {
+        if (!data) return true;
+        if (endpoint === 'move-breakdown') {
+            return Object.values(data).every(v => v === 0);
+        }
+        if (endpoint === 'phases') {
+            // If overall opening accuracy is 0, we assume no analysis yet
+            return !data.overall || data.overall.opening === 0;
+        }
+        return false;
+    }
+
+    function checkHealth() {
+        fetchJSON('/analysis/health/').then(d => {
+            const dot = document.querySelector('.status-dot');
+            const text = document.querySelector('.status-text');
+            if (!dot || !text) return;
+
+            if (d.active_tasks > 0 || d.queue_length > 0) {
+                dot.className = 'status-dot busy';
+                const qText = d.queue_length > 0 ? ` (Queue: ${d.queue_length})` : '';
+                text.textContent = `Engine: Working${qText}`;
+            } else {
+                dot.className = 'status-dot free';
+                text.textContent = 'Engine: Ready';
+            }
+        }).catch(() => {});
+    }
+
+    function runAnalysisBatch(period) {
+        if (isAnalyzing || !activeUsername) return;
+        
+        isAnalyzing = true;
+        show('analysisProgress');
+        const pText = document.querySelector('.pbar-text');
+        if (pText) pText.textContent = "Connecting to engine...";
+
+        document.getElementById('btnSyncRecent').disabled = true;
+        document.getElementById('btnSyncMonth').disabled = true;
+
+        fetch('/analysis/api/analyze-period/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRF()
+            },
+            body: JSON.stringify({ username: activeUsername, period: period })
+        })
+        .then(r => r.json())
+        .then(res => {
+            isAnalyzing = false;
+            hide('analysisProgress');
+            document.getElementById('btnSyncRecent').disabled = false;
+            document.getElementById('btnSyncMonth').disabled = false;
+
+            if (res.status === 'complete' || res.status === 'success') {
+                const count = res.games_processed || res.processed_count || 0;
+                const msg = res.server_busy ? `Server busy: Analyzed ${count} games.` : `Analyzed ${count} games successfully.`;
+                alert(msg);
+                loadAll(activeUsername); // Refresh data
+            } else if (res.status === 'no_games') {
+                alert("All games in this period are already analyzed!");
+            }
+        })
+        .catch(err => {
+            isAnalyzing = false;
+            hide('analysisProgress');
+            document.getElementById('btnSyncRecent').disabled = false;
+            document.getElementById('btnSyncMonth').disabled = false;
+            alert("Error running analysis batch.");
+        });
+    }
+
+    document.getElementById('btnSyncRecent').addEventListener('click', () => runAnalysisBatch('week'));
+    document.getElementById('btnSyncMonth').addEventListener('click', () => runAnalysisBatch('month'));
 
     // ── Summary ────────────────────────────────────────────
     function renderSummary(d) {
@@ -86,6 +236,10 @@
         setText('statWorstAcc', d.worst_accuracy !== null ? d.worst_accuracy + '%' : '--');
         setText('whiteAcc', d.white_accuracy + '%');
         setText('blackAcc', d.black_accuracy + '%');
+        
+        // Split winrates
+        setText('winRateWhite', `W: ${d.white_stats.win_rate}%`);
+        setText('winRateBlack', `B: ${d.black_stats.win_rate}%`);
 
         // Best / worst game links
         if (d.best_game_id) {
@@ -163,8 +317,14 @@
         if (!ctx) return;
 
         const catOrder = ['brilliant','great','best','excellent','good','book','inaccuracy','miss','mistake','blunder'];
-        const labels = catOrder.map(k => CAT_LABELS[k]);
         const values = catOrder.map(k => data[k] || 0);
+        const total = values.reduce((sum, val) => sum + val, 0) || 1;
+        // Include the count and percentage directly in the legend label
+        const labels = catOrder.map(k => {
+            const val = data[k] || 0;
+            const pct = ((val / total) * 100).toFixed(1);
+            return `${CAT_LABELS[k]} (${val}) - ${pct}%`;
+        });
         const colors = catOrder.map(k => CAT_COLORS[k]);
 
         breakdownChart = new Chart(ctx, {
@@ -182,7 +342,7 @@
                         position: 'right',
                         labels: { boxWidth: 10, padding: 8, font: { size: 11 } },
                     },
-                    tooltip: { callbacks: { label: item => `${item.label}: ${item.raw}` } },
+                    tooltip: { callbacks: { label: item => `${item.label}` } },
                 },
             },
         });
@@ -202,15 +362,22 @@
                     {
                         label: 'White',
                         data: [data.white.opening, data.white.middlegame, data.white.endgame],
-                        backgroundColor: 'rgba(240,192,64,0.8)',
-                        borderRadius: 4,
+                        backgroundColor: 'rgba(210,180,60,0.8)',
                     },
                     {
                         label: 'Black',
                         data: [data.black.opening, data.black.middlegame, data.black.endgame],
                         backgroundColor: 'rgba(91,156,246,0.8)',
-                        borderRadius: 4,
                     },
+                    {
+                        label: 'Overall',
+                        data: [data.overall.opening, data.overall.middlegame, data.overall.endgame],
+                        backgroundColor: 'rgba(255,255,255,0.15)',
+                        borderColor: '#8a8480',
+                        borderWidth: 1,
+                        type: 'line',
+                        tension: 0.4
+                    }
                 ],
             },
             options: {
@@ -233,14 +400,17 @@
     }
 
     // ── Openings table ─────────────────────────────────────
-    window.setOpeningColor = function (color) {
+    function setOpeningColor(color) {
         activeColor = color;
         document.getElementById('tabWhite').classList.toggle('active', color === 'white');
         document.getElementById('tabBlack').classList.toggle('active', color === 'black');
         if (!activeUsername) return;
         fetchJSON(`/insights/api/openings/?username=${encodeURIComponent(activeUsername)}&color=${color}`)
             .then(renderOpenings);
-    };
+    }
+    
+    document.getElementById('tabWhite').addEventListener('click', () => setOpeningColor('white'));
+    document.getElementById('tabBlack').addEventListener('click', () => setOpeningColor('black'));
 
     function renderOpenings(data) {
         const tbody = document.getElementById('openingsBody');
@@ -252,7 +422,7 @@
         tbody.innerHTML = data.map((row, i) => {
             const wr = row.win_rate;
             const wrClass = wr >= 55 ? 'good' : wr >= 40 ? 'avg' : 'bad';
-            const gameUrl = `/user/game/?opening=${encodeURIComponent(row.opening)}`;
+            const gameUrl = `/user/game/?username=${encodeURIComponent(activeUsername)}&opening=${encodeURIComponent(row.opening)}`;
             return `<tr onclick="window.location.href='${gameUrl}'" title="View games with this opening">
                 <td style="color:#8a8480">${i + 1}</td>
                 <td class="opening-name-cell">${row.opening}</td>
@@ -274,8 +444,15 @@
     }
 
     // ── Helpers ────────────────────────────────────────────
-    function fetchJSON(url) {
-        return fetch(url).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); });
+    async function fetchJSON(url) {
+        const r = await fetch(url);
+        const data = await r.json();
+        if (!r.ok) {
+            const err = new Error(data.message || `Error ${r.status}`);
+            err.details = data.details;
+            throw err;
+        }
+        return data;
     }
     function show(id) { const e = document.getElementById(id); if (e) e.style.display = ''; }
     function hide(id) { const e = document.getElementById(id); if (e) e.style.display = 'none'; }

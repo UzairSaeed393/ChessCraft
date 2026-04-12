@@ -8,4 +8,6 @@ urlpatterns = [
     path('api/review/start/', views.run_full_game_review, name='run_full_game_review'),
     path('api/review/latest/<int:game_id>/', views.latest_saved_review, name='latest_saved_review'),
     path('api/variation/', views.analyze_variation, name='analyze_variation'),
+    path('api/analyze-period/', views.api_analyze_period, name='api_analyze_period'),
+    path('health/', views.api_engine_health, name='api_engine_health'),
 ]

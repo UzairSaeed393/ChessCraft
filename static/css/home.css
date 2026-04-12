@@ -1,21 +1,245 @@
-:root {
-    --primary: #0A653A;
-    --primary-dark: #084f2d;
-    --secondary: rgb(166, 248, 166);
-    --mainbg: #d1e7dd;
-    --bg1: rgb(148, 215, 237);
-    --bg2: #91db91;
-    --btn1: #ff9f1c;
-    --btn2: rgb(30, 60, 85);
-    --lighttext: white;
-    --darkgreentext: #0A653A;
-    --darktext: black;
-    --font1: 'Poppins', sans-serif;
-    --font2: 'roboto', sans-serif;
-}
+/* ============================================================
+   home.css — ChessCraft Premium Landing Page
+   ============================================================ */
 
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-}
+   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+   * {
+       box-sizing: border-box;
+   }
+
+   :root {
+       --home-bg: var(--mainbg);
+       --home-surface: var(--bg2);
+       --home-card: var(--bg1);
+       --home-border: rgba(0,0,0,0.1);
+       --home-text: var(--darktext);
+       --home-muted: #333;
+       --home-accent: var(--primary);
+       --home-accent-hover: var(--primary-dark);
+       --home-accent2: var(--btn1);
+       --font-home: var(--font1);
+   }
+   
+   .home-shell {
+       max-width: 1100px;
+       margin: 0 auto;
+       padding: 40px 20px 80px;
+       font-family: var(--font-home);
+       color: var(--home-text);
+   }
+   
+   /* ── Hero Section ── */
+   .hero {
+       text-align: center;
+       margin-bottom: 50px;
+   }
+   .hero-title {
+       font-size: 3rem;
+       font-weight: 800;
+       letter-spacing: -1px;
+       margin: 0 0 16px;
+   }
+   .hero-highlight {
+       background: linear-gradient(135deg, var(--primary) 10%, var(--primary-dark) 100%);
+       -webkit-background-clip: text;
+       -webkit-text-fill-color: transparent;
+       background-clip: text;
+   }
+   .hero-subtitle {
+       font-size: 1.15rem;
+       color: var(--home-muted);
+       max-width: 600px;
+       margin: 0 auto;
+       line-height: 1.5;
+   }
+   
+   /* ── Play Section (Board + Sidebar) ── */
+   .play-section {
+       display: flex;
+       gap: 30px;
+       align-items: flex-start;
+       justify-content: center;
+       margin-bottom: 60px;
+       width: 100%;
+       overflow: hidden; /* Prevent horizontal scroll */
+   }
+   
+   .board-wrapper {
+       flex-shrink: 0;
+       width: 450px;
+       height: 450px;
+       border-radius: 6px;
+       overflow: hidden;
+       box-shadow: 0 12px 30px rgba(0,0,0,0.4);
+   }
+   #homeBoard {
+       width: 100%;
+       height: 100%;
+   }
+   
+   .ai-controls {
+       background: var(--home-surface);
+       border: 1px solid var(--home-border);
+       border-radius: 16px;
+       width: 320px;
+       padding: 24px;
+       display: flex;
+       flex-direction: column;
+       gap: 24px;
+   }
+   
+   .controls-title {
+       font-size: 1.25rem;
+       font-weight: 700;
+       margin: 0;
+       display: flex;
+       align-items: center;
+       gap: 10px;
+   }
+   .controls-title i { color: var(--home-accent); font-size: 1.4rem; }
+   
+   .control-group label {
+       display: block;
+       font-size: 0.85rem;
+       color: var(--home-muted);
+       text-transform: uppercase;
+       letter-spacing: 1px;
+       font-weight: 600;
+       margin-bottom: 12px;
+   }
+   
+   /* Slider */
+   .elo-display {
+       text-align: center;
+       font-size: 1.8rem;
+       font-weight: 800;
+       color: var(--home-accent);
+       margin-bottom: 12px;
+   }
+   .elo-slider {
+       width: 100%;
+       accent-color: var(--home-accent);
+       cursor: pointer;
+   }
+   .elo-labels {
+       display: flex;
+       justify-content: space-between;
+       font-size: 0.75rem;
+       color: var(--home-muted);
+       margin-top: 6px;
+   }
+   
+   /* Toggle Button */
+   .color-toggle {
+       display: flex;
+       background: var(--home-card);
+       border-radius: 8px;
+       padding: 4px;
+       border: 1px solid var(--home-border);
+   }
+   .color-btn {
+       flex: 1;
+       background: transparent;
+       border: none;
+       color: var(--home-muted);
+       font-size: 0.95rem;
+       font-weight: 600;
+       padding: 10px 0;
+       border-radius: 6px;
+       cursor: pointer;
+       transition: all 0.2s;
+   }
+   .color-btn.active {
+       background: var(--primary);
+       color: var(--lighttext);
+       box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+   }
+   
+   /* Status Box */
+   .status-box {
+       background: var(--home-card);
+       border: 1px solid var(--home-border);
+       border-left: 4px solid var(--home-accent);
+       border-radius: 8px;
+       padding: 14px;
+       font-size: 0.9rem;
+       line-height: 1.4;
+       min-height: 60px;
+       display: flex;
+       align-items: center;
+       transition: border-color 0.3s;
+   }
+   .status-box.error { border-left-color: #e84040; }
+   .status-box.thinking { border-left-color: #5b9cf6; }
+   
+   .btn-new-game {
+       background: var(--home-accent);
+       color: var(--lighttext);
+       border: none;
+       padding: 14px;
+       font-size: 1rem;
+       font-weight: 600;
+       border-radius: 8px;
+       cursor: pointer;
+       transition: background 0.2s;
+       width: 100%;
+       display: flex;
+       justify-content: center;
+       align-items: center;
+       gap: 8px;
+   }
+   .btn-new-game:hover { background: var(--home-accent-hover); }
+   
+   
+   /* ── Features Grid ── */
+   .features-grid {
+       display: grid;
+       grid-template-columns: repeat(3, 1fr);
+       gap: 20px;
+   }
+   
+   .feature-card {
+       background: var(--home-surface);
+       border: 1px solid var(--home-border);
+       border-radius: 16px;
+       padding: 30px;
+       text-decoration: none;
+       color: var(--home-text);
+       transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+       display: flex;
+       flex-direction: column;
+   }
+   .feature-card:hover {
+       transform: translateY(-5px);
+       box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+       border-color: rgba(255,255,255,0.15);
+   }
+   .feature-card.highlight {
+       background: linear-gradient(160deg, var(--bg2) 0%, var(--mainbg) 100%);
+       border-color: var(--primary);
+   }
+   .feature-icon {
+       font-size: 2.5rem;
+       color: var(--home-accent);
+       margin-bottom: 20px;
+   }
+   .feature-card h3 {
+       font-size: 1.2rem;
+       font-weight: 700;
+       margin: 0 0 10px;
+   }
+   .feature-card p {
+       color: var(--home-muted);
+       font-size: 0.95rem;
+       line-height: 1.5;
+       margin: 0;
+   }
+   
+   /* Responsive */
+    @media (max-width: 850px) {
+        .play-section { flex-direction: column; align-items: center; gap: 20px; }
+        .board-wrapper { width: 100%; max-width: 450px; height: auto; aspect-ratio: 1; }
+        .ai-controls { width: 100%; max-width: 450px; }
+        .features-grid { grid-template-columns: 1fr; }
+    }

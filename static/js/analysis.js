@@ -488,8 +488,14 @@
     }
 
     async function loadReviewData() {
-        el.summaryText.textContent = 'Analyzing your game...';
+        el.summaryText.textContent = 'Preparing analysis...';
         startProgress();
+
+        // Detect if server is busy by setting a timeout for the message
+        const busyTimer = setTimeout(() => {
+            el.summaryText.textContent = 'Server is currently busy with other requests. Your review is in the queue and will start in a moment...';
+            el.summaryText.style.color = '#f0c040';
+        }, 3000);
         
         try {
             const data = await postJson('/analysis/api/review/start/', {
@@ -509,7 +515,10 @@
 
             el.startReviewBtn.disabled = false;
             el.summaryText.textContent = 'Game analysis complete.';
+            el.summaryText.style.color = '';
+            clearTimeout(busyTimer);
         } catch (err) {
+            clearTimeout(busyTimer);
             clearInterval(state.progressInterval);
             throw err;
         }

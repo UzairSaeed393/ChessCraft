@@ -1,96 +1,179 @@
-document.querySelectorAll(".featurecard").forEach(card => {
-    card.addEventListener("click", function (e) {
-        e.stopPropagation();
-        this.classList.toggle("flip");
-    });
-});
+/* ============================================================
+   home.js — ChessCraft Home Page Play vs AI
+   ============================================================ */
 
-document.addEventListener("click", () => {
-    document.querySelectorAll(".featurecard.flip").forEach(card => {
-        card.classList.remove("flip");
-    });
-});
-setTimeout(() => {
-        document.querySelectorAll('.auto-dismiss').forEach(alert => {
-            const bsAlert = bootstrap.Alert.getOrCreateInstance(alert);
-            bsAlert.close();
+document.addEventListener('DOMContentLoaded', () => {
+    
+    // UI Elements
+    const eloSlider = document.getElementById('eloSlider');
+    const eloValue = document.getElementById('eloValue');
+    const btnPlayWhite = document.getElementById('btnPlayWhite');
+    const btnPlayBlack = document.getElementById('btnPlayBlack');
+    const btnNewGame = document.getElementById('btnNewGame');
+    const statusBox = document.getElementById('gameStatus');
+    
+    // Game State
+    let game = new Chess();
+    let board = null;
+    let playerColor = 'white'; // 'white' or 'black'
+    let aiThinking = false;
+    let gameStarted = false;
+    
+    // CSRF token for POST
+    function getCSRFToken() {
+        const cookies = document.cookie.split(';');
+        for (let c of cookies) {
+            c = c.trim();
+            if (c.startsWith('csrftoken=')) return c.substring(10);
+        }
+        return '';
+    }
+
+    // Initialize Board
+    function initBoard() {
+        game.reset();
+        aiThinking = false;
+        gameStarted = false;
+        
+        board = Chessboard('homeBoard', {
+            draggable: true,
+            position: game.fen(),
+            orientation: playerColor,
+            onDragStart: onDragStart,
+            onDrop: onDrop,
+            onSnapEnd: onSnapEnd,
+            pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png'
         });
-}, 5000);
+        
+        updateStatus("Your move! Good luck.");
 
-// Animated count-up for counter chips
-function animateCount(el, duration = 1100) {
-    const target = parseInt(el.getAttribute('data-target')) || 0;
-    const start = 0;
-    const startTime = performance.now();
+        // We no longer trigger AI move immediately if playing as black.
+        // The game starts when the user chooses or makes a move.
+    }
 
-    function tick(now) {
-        const progress = Math.min((now - startTime) / duration, 1);
-        const value = Math.floor(progress * (target - start) + start);
-        el.textContent = value.toLocaleString();
-        if (progress < 1) {
-            requestAnimationFrame(tick);
-        } else {
-            el.textContent = target.toLocaleString();
-            // subtle visual feedback
-            const chip = el.closest('.countercard');
-            if (chip) {
-                chip.classList.add('chip-bounce');
-                setTimeout(() => chip.classList.remove('chip-bounce'), 520);
-            }
+    function onDragStart(source, piece, position, orientation) {
+        if (aiThinking) return false;
+        if (game.game_over()) return false;
+        // Don't let player move AI pieces
+        if ((game.turn() === 'w' && piece.search(/^b/) !== -1) ||
+            (game.turn() === 'b' && piece.search(/^w/) !== -1)) {
+            return false;
         }
     }
 
-    requestAnimationFrame(tick);
-}
-
-// observe when counters enter viewport
-const counters = document.querySelectorAll('.count-number');
-if ('IntersectionObserver' in window) {
-    const io = new IntersectionObserver(entries => {
-        entries.forEach(entry => {
-            if (entry.isIntersecting) {
-                animateCount(entry.target);
-                io.unobserve(entry.target);
-            }
+    function onDrop(source, target) {
+        const move = game.move({
+            from: source,
+            to: target,
+            promotion: 'q'
         });
-    }, { threshold: 0.4 });
 
-    counters.forEach(c => io.observe(c));
-} else {
-    // fallback
-    counters.forEach(c => animateCount(c));
-}
-// Scroll reveal animation
-const reveals = document.querySelectorAll('.reveal');
+        if (move === null) return 'snapback';
 
-const observer = new IntersectionObserver(
-  entries => {
-    entries.forEach(entry => {
-      if (entry.isIntersecting) {
-        entry.target.classList.add('active');
-        observer.unobserve(entry.target);
-      }
-    });
-  },
-  { threshold: 0.15 }
-);
-
-reveals.forEach(el => observer.observe(el));
-
-// Counter animation (safe)
-document.querySelectorAll('.count-number').forEach(counter => {
-  const target = +counter.dataset.target;
-  let current = 0;
-  const step = Math.ceil(target / 60);
-
-  const update = () => {
-    current += step;
-    if (current >= target) {
-      counter.innerText = target;
-    } else {
-      counter.innerText = current;
-      requestAnimationFrame(update);
+        gameStarted = true;
+        checkGameEnd();
+        if (!game.game_over()) {
+            window.setTimeout(triggerAIMove, 250);
+        }
     }
-  };
-  update();
+
+    function onSnapEnd() {
+        board.position(game.fen());
+    }
+
+    // Request Move from Server
+    async function triggerAIMove() {
+        aiThinking = true;
+        updateStatus("AI is thinking...", "thinking");
+
+        const elo = parseInt(eloSlider.value);
+        const fen = game.fen();
+
+        try {
+            const resp = await fetch('/api/play-vs-ai/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCSRFToken(),
+                },
+                body: JSON.stringify({ fen: fen, elo: elo })
+            });
+
+            const data = await resp.json();
+
+            if (!resp.ok) {
+                throw new Error(data.error || 'Server error');
+            }
+
+            const aiMoveUci = data.best_move;
+            if (aiMoveUci) {
+                // Parse UCI (e.g. e2e4 or e7e8q)
+                const fromSqr = aiMoveUci.substring(0, 2);
+                const toSqr = aiMoveUci.substring(2, 4);
+                const prom = aiMoveUci.length > 4 ? aiMoveUci.substring(4) : undefined;
+                
+                // Apply move to internal chess logic
+                game.move({ from: fromSqr, to: toSqr, promotion: prom });
+                
+                // Play move on UI board
+                board.position(game.fen());
+
+                aiThinking = false;
+                checkGameEnd();
+                if (!game.game_over()) {
+                    updateStatus(`AI played ${aiMoveUci}. Your turn!`);
+                }
+            }
+        } catch (err) {
+            console.error(err);
+            updateStatus("Error fetching AI move: " + err.message, "error");
+            aiThinking = false;
+        }
+    }
+
+    function checkGameEnd() {
+        if (game.in_checkmate()) {
+            const winner = game.turn() === 'w' ? 'Black' : 'White';
+            updateStatus(`Checkmate! ${winner} wins.`, "error");
+        } else if (game.in_draw() || game.in_stalemate() || game.in_threefold_repetition()) {
+            updateStatus("Game drawn.", "thinking");
+        }
+    }
+
+    function updateStatus(msg, statusClass = "") {
+        statusBox.textContent = msg;
+        statusBox.className = "status-box " + statusClass;
+    }
+
+    // Events
+    eloSlider.addEventListener('input', (e) => {
+        eloValue.textContent = e.target.value;
+    });
+
+    btnPlayWhite.addEventListener('click', () => {
+        if (aiThinking) return;
+        playerColor = 'white';
+        btnPlayWhite.classList.add('active');
+        btnPlayBlack.classList.remove('active');
+        initBoard();
+    });
+
+    btnPlayBlack.addEventListener('click', () => {
+        if (aiThinking) return;
+        playerColor = 'black';
+        btnPlayBlack.classList.add('active');
+        btnPlayWhite.classList.remove('active');
+        initBoard();
+        // Since user clicked "Play Black", AI (White) starts now
+        gameStarted = true;
+        setTimeout(triggerAIMove, 250);
+    });
+
+    btnNewGame.addEventListener('click', () => {
+        if (aiThinking) return;
+        initBoard();
+    });
+
+    // Start
+    initBoard();
 });
