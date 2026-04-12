@@ -1,0 +1,160 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Player Insights — ChessCraft{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/insights.css' %}">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+{% endblock %}
+
+{% block content %}
+<div class="insights-shell">
+
+    <!-- Header -->
+    <div class="ins-header">
+        <h1><i class="bi bi-bar-chart-line-fill" style="font-size:1.6rem;-webkit-text-fill-color:#81b64c"></i> Player Insights</h1>
+        <p>Deep analytics from your analyzed games</p>
+    </div>
+
+    <!-- Player Selector -->
+    {% if chess_usernames %}
+    <div class="player-selector" id="playerSelector">
+        {% for uname in chess_usernames %}
+        <button class="player-btn {% if forloop.first %}active{% endif %}" data-username="{{ uname }}">
+            <i class="bi bi-person-fill me-1"></i>{{ uname }}
+        </button>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="ins-empty">
+        <i class="bi bi-controller"></i>
+        <p>No games fetched yet. Go to <a href="{% url 'game' %}" class="text-success">Games</a> to import your games and analyze them.</p>
+    </div>
+    {% endif %}
+
+    <!-- Loading spinner -->
+    <div id="insLoading" class="ins-loading" style="display:none">
+        <div class="ins-spinner"></div>
+        Loading your insights…
+    </div>
+
+    <!-- Main content (hidden until loaded) -->
+    <div id="insContent" style="display:none">
+
+        <!-- Stat Summary Cards -->
+        <div class="ins-section-title"><i class="bi bi-speedometer2"></i>Performance Summary</div>
+        <div class="summary-grid">
+            <div class="stat-card highlight">
+                <span class="stat-icon">🎯</span>
+                <div class="stat-value" id="statAvgAcc">--</div>
+                <div class="stat-label">Avg Accuracy</div>
+            </div>
+            <div class="stat-card">
+                <span class="stat-icon">🎮</span>
+                <div class="stat-value" id="statGames">--</div>
+                <div class="stat-label">Games Analyzed</div>
+            </div>
+            <div class="stat-card wins">
+                <span class="stat-icon">🏆</span>
+                <div class="stat-value" id="statWinRate">--</div>
+                <div class="stat-label">Win Rate</div>
+            </div>
+            <div class="stat-card">
+                <span class="stat-icon">⭐</span>
+                <div class="stat-value" id="statBestAcc">--</div>
+                <div class="stat-label">Best Game</div>
+            </div>
+            <div class="stat-card losses">
+                <span class="stat-icon">📉</span>
+                <div class="stat-value" id="statWorstAcc">--</div>
+                <div class="stat-label">Worst Game</div>
+            </div>
+        </div>
+
+        <!-- W/D/L Bar -->
+        <div class="ins-card mb-3" style="margin-bottom:20px">
+            <div class="wdl-bar" id="wdlBar">
+                <div class="w-seg" id="wSeg"></div>
+                <div class="d-seg" id="dSeg"></div>
+                <div class="l-seg" id="lSeg"></div>
+            </div>
+            <div class="wdl-labels">
+                <span id="wLabel" class="mini-w">W: --</span>
+                <span id="dLabel" class="mini-d">D: --</span>
+                <span id="lLabel" class="mini-l">L: --</span>
+            </div>
+        </div>
+
+        <!-- Accuracy by Color -->
+        <div class="acc-color-row">
+            <div class="acc-card">
+                <div class="side-label">♙ As White</div>
+                <div class="side-value" id="whiteAcc">--</div>
+            </div>
+            <div class="acc-card black-side">
+                <div class="side-label">♟ As Black</div>
+                <div class="side-value" id="blackAcc">--</div>
+            </div>
+        </div>
+
+        <!-- Accuracy Trend -->
+        <div class="ins-card" style="margin-bottom:20px">
+            <div class="ins-section-title"><i class="bi bi-graph-up-arrow"></i>Accuracy Over Time</div>
+            <div class="chart-wrap" style="height:200px">
+                <canvas id="trendChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Move breakdown + Phase performance -->
+        <div class="ins-two-col" style="margin-bottom:20px">
+            <div class="ins-card">
+                <div class="ins-section-title"><i class="bi bi-pie-chart-fill"></i>Move Breakdown</div>
+                <div class="chart-wrap" style="height:200px">
+                    <canvas id="breakdownChart"></canvas>
+                </div>
+            </div>
+            <div class="ins-card">
+                <div class="ins-section-title"><i class="bi bi-layers-fill"></i>Phase Performance</div>
+                <div class="chart-wrap" style="height:200px">
+                    <canvas id="phaseChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Opening Insights -->
+        <div class="ins-card" style="margin-bottom:20px">
+            <div class="ins-section-title"><i class="bi bi-book-fill"></i>Opening Insights</div>
+            <div class="color-tabs">
+                <button class="color-tab active" id="tabWhite" onclick="setOpeningColor('white')">♙ As White</button>
+                <button class="color-tab" id="tabBlack" onclick="setOpeningColor('black')">♟ As Black</button>
+            </div>
+            <div id="openingsTableWrap">
+                <table class="openings-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Opening</th>
+                            <th>Games</th>
+                            <th>W</th><th>D</th><th>L</th>
+                            <th>Win %</th>
+                        </tr>
+                    </thead>
+                    <tbody id="openingsBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Coaching Tips -->
+        <div class="ins-card">
+            <div class="ins-section-title"><i class="bi bi-robot"></i>AI Coaching Tips</div>
+            <ul class="tips-list" id="tipsList"></ul>
+        </div>
+
+    </div><!-- end #insContent -->
+
+</div><!-- end .insights-shell -->
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/insights.js' %}"></script>
+{% endblock %}

@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     'main',
     'user',
     'analysis',
+    'insights',
 ]
 
 MIDDLEWARE = [

@@ -1,0 +1,318 @@
+/* ============================================================
+   insights.css — ChessCraft Insights Page
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+:root {
+    --ins-bg: #181716;
+    --ins-surface: #222120;
+    --ins-card: #2a2927;
+    --ins-card-hover: #302e2c;
+    --ins-border: rgba(255,255,255,0.08);
+    --ins-text: #e8e6e3;
+    --ins-muted: #8a8480;
+    --ins-accent: #81b64c;
+    --ins-accent2: #f0c040;
+    --ins-red: #e84040;
+    --ins-cyan: #29d0d0;
+    --ins-blue: #5b9cf6;
+    --ins-orange: #f5833a;
+    --font-ins: 'Inter', sans-serif;
+}
+
+/* Shell */
+.insights-shell {
+    max-width: 1080px;
+    margin: 22px auto 48px;
+    font-family: var(--font-ins);
+    color: var(--ins-text);
+    padding: 0 12px;
+}
+
+/* Page header */
+.ins-header {
+    text-align: center;
+    margin-bottom: 28px;
+}
+.ins-header h1 {
+    font-size: 2rem;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    background: linear-gradient(135deg, #fff 30%, #81b64c 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin: 0 0 6px;
+}
+.ins-header p {
+    color: var(--ins-muted);
+    font-size: 0.95rem;
+    margin: 0;
+}
+
+/* Player selector */
+.player-selector {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 30px;
+}
+.player-btn {
+    background: var(--ins-card);
+    border: 1px solid var(--ins-border);
+    color: var(--ins-muted);
+    font-family: var(--font-ins);
+    font-size: 0.9rem;
+    font-weight: 500;
+    padding: 8px 20px;
+    border-radius: 50px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.player-btn:hover {
+    border-color: var(--ins-accent);
+    color: var(--ins-text);
+}
+.player-btn.active {
+    background: var(--ins-accent);
+    border-color: var(--ins-accent);
+    color: #fff;
+    font-weight: 700;
+}
+
+/* Loading state */
+.ins-loading {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--ins-muted);
+    font-size: 1rem;
+}
+.ins-spinner {
+    width: 36px;
+    height: 36px;
+    border: 3px solid var(--ins-border);
+    border-top-color: var(--ins-accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto 16px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Section headings */
+.ins-section-title {
+    font-size: 1rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--ins-muted);
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.ins-section-title i { color: var(--ins-accent); font-size: 1.1rem; }
+
+/* Generic card */
+.ins-card {
+    background: var(--ins-card);
+    border: 1px solid var(--ins-border);
+    border-radius: 16px;
+    padding: 20px 22px;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+.ins-card:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,0.3); }
+
+/* ── Summary stat cards row ── */
+.summary-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+    margin-bottom: 20px;
+}
+@media (max-width: 820px) { .summary-grid { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 520px) { .summary-grid { grid-template-columns: repeat(2, 1fr); } }
+
+.stat-card {
+    background: var(--ins-card);
+    border: 1px solid var(--ins-border);
+    border-radius: 14px;
+    padding: 16px 14px;
+    text-align: center;
+    transition: all 0.2s ease;
+}
+.stat-card:hover { background: var(--ins-card-hover); border-color: var(--ins-accent); }
+.stat-card .stat-icon {
+    font-size: 1.5rem;
+    margin-bottom: 6px;
+    display: block;
+}
+.stat-card .stat-value {
+    font-size: 1.8rem;
+    font-weight: 800;
+    line-height: 1;
+    color: var(--ins-accent);
+}
+.stat-card .stat-label {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--ins-muted);
+    margin-top: 5px;
+}
+.stat-card.highlight .stat-value { color: var(--ins-accent2); }
+.stat-card.wins .stat-value { color: #81b64c; }
+.stat-card.losses .stat-value { color: var(--ins-red); }
+
+/* WDL bar */
+.wdl-bar {
+    display: flex;
+    border-radius: 6px;
+    overflow: hidden;
+    height: 8px;
+    margin-top: 16px;
+    margin-bottom: 8px;
+}
+.wdl-bar .w-seg { background: #81b64c; }
+.wdl-bar .d-seg { background: #999; }
+.wdl-bar .l-seg { background: var(--ins-red); }
+.wdl-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.75rem;
+    color: var(--ins-muted);
+}
+
+/* ── Two-column layout ── */
+.ins-two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 20px;
+}
+@media (max-width: 700px) { .ins-two-col { grid-template-columns: 1fr; } }
+
+/* Chart containers */
+.chart-wrap {
+    position: relative;
+    width: 100%;
+}
+.chart-wrap canvas { width: 100% !important; }
+
+/* ── Opening table ── */
+.color-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+.color-tab {
+    background: var(--ins-surface);
+    border: 1px solid var(--ins-border);
+    border-radius: 8px;
+    padding: 6px 18px;
+    font-size: 0.88rem;
+    font-weight: 600;
+    cursor: pointer;
+    color: var(--ins-muted);
+    transition: all 0.2s;
+}
+.color-tab.active { background: var(--ins-accent); border-color: var(--ins-accent); color: #fff; }
+
+.openings-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88rem;
+}
+.openings-table th {
+    text-align: left;
+    padding: 8px 10px;
+    color: var(--ins-muted);
+    font-weight: 600;
+    border-bottom: 1px solid var(--ins-border);
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.openings-table td {
+    padding: 10px 10px;
+    border-bottom: 1px solid var(--ins-border);
+    vertical-align: middle;
+}
+.openings-table tr:last-child td { border-bottom: none; }
+.openings-table tr:hover td { background: rgba(255,255,255,0.03); cursor: pointer; }
+.opening-name-cell {
+    font-weight: 600;
+    color: var(--ins-text);
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.win-rate-cell { font-weight: 700; }
+.win-rate-cell.good { color: var(--ins-accent); }
+.win-rate-cell.avg { color: var(--ins-accent2); }
+.win-rate-cell.bad { color: var(--ins-red); }
+.mini-wdl {
+    display: flex;
+    gap: 2px;
+    font-size: 0.78rem;
+}
+.mini-w { color: #81b64c; }
+.mini-d { color: #999; }
+.mini-l { color: var(--ins-red); }
+
+/* ── Coaching tips ── */
+.tips-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.tips-list li {
+    background: var(--ins-surface);
+    border-left: 3px solid var(--ins-accent);
+    border-radius: 0 10px 10px 0;
+    padding: 10px 14px;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    color: var(--ins-text);
+}
+
+/* Accuracy color cards (White/Black) */
+.acc-color-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+.acc-card {
+    background: var(--ins-card);
+    border: 1px solid var(--ins-border);
+    border-radius: 14px;
+    padding: 16px;
+    text-align: center;
+}
+.acc-card .side-label {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--ins-muted);
+    margin-bottom: 4px;
+}
+.acc-card .side-value {
+    font-size: 2.2rem;
+    font-weight: 800;
+    color: var(--ins-accent);
+}
+.acc-card.black-side .side-value { color: var(--ins-accent2); }
+
+/* Empty state */
+.ins-empty {
+    text-align: center;
+    padding: 50px 20px;
+    color: var(--ins-muted);
+}
+.ins-empty i { font-size: 2.5rem; margin-bottom: 12px; display: block; }

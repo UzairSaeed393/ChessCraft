@@ -90,7 +90,11 @@ def game_view(request):
         return redirect('game')
 
     # GET request: Paginate games belonging to this user, newest first
+    opening_filter = request.GET.get('opening', '').strip()
     games_qs = Game.objects.filter(user=request.user).order_by('-date_played')
+    if opening_filter:
+        games_qs = games_qs.filter(opening__icontains=opening_filter)
+
     paginator = Paginator(games_qs, 50)
     page_obj = paginator.get_page(request.GET.get('page'))
 
@@ -102,6 +106,7 @@ def game_view(request):
             'page_obj': page_obj,
             'paginator': paginator,
             'total_games': games_qs.count(),
+            'opening_filter': opening_filter,
         },
     )
 

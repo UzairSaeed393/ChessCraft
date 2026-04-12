@@ -1,8 +1,29 @@
 import requests
+import chess.pgn
+import io
 from datetime import datetime, timedelta, timezone as dt_timezone
 from django.db import IntegrityError
 from django.utils import timezone
 from .models import Game
+
+
+def _extract_opening(pgn_text: str) -> str | None:
+    """Pull the opening name out of PGN headers."""
+    try:
+        game = chess.pgn.read_game(io.StringIO(pgn_text or ''))
+        if game:
+            # Chess.com PGNs include ECOUrl like ".../openings/Italian-Game-Evans-Gambit"
+            eco_url = game.headers.get('ECOUrl', '')
+            if eco_url:
+                name = eco_url.rstrip('/').split('/')[-1].replace('-', ' ')
+                if name:
+                    return name
+            opening = game.headers.get('Opening', '')
+            if opening and opening not in ('?', '-', ''):
+                return opening
+    except Exception:
+        pass
+    return None
 
 
 CHESSCOM_API_HEADERS = {
@@ -127,6 +148,7 @@ def fetch_and_save_games(user, chess_username, date_range):
             outcome = 'Loss'
 
         # 5. Stage for bulk insert
+        pgn_text = g.get('pgn', '')
         to_create.append(
             Game(
                 user=user,
@@ -139,7 +161,8 @@ def fetch_and_save_games(user, chess_username, date_range):
                 black_rating=black.get('rating', 0),
                 result=outcome,
                 time_control=g.get('time_control', 'N/A'),
-                pgn=g.get('pgn', ''),
+                opening=_extract_opening(pgn_text),
+                pgn=pgn_text,
             )
         )
 

@@ -180,6 +180,7 @@ def _build_game_review_payload(game_obj: Game, user) -> tuple[dict, SavedAnalysi
 
     analysis_record = SavedAnalysis.objects.create(
         user=user,
+        game=game_obj,
         pgn_data=game_obj.pgn or "",
     )
 
@@ -354,6 +355,15 @@ def _build_game_review_payload(game_obj: Game, user) -> tuple[dict, SavedAnalysi
     analysis_record.black_accuracy = black_accuracy
     analysis_record.white_rating_est = white_rating_est
     analysis_record.black_rating_est = black_rating_est
+    
+    # Save accurately calculated phase data
+    analysis_record.white_opening_acc = phase_accuracy["white"].get("opening")
+    analysis_record.white_mid_acc = phase_accuracy["white"].get("middlegame")
+    analysis_record.white_end_acc = phase_accuracy["white"].get("endgame")
+    analysis_record.black_opening_acc = phase_accuracy["black"].get("opening")
+    analysis_record.black_mid_acc = phase_accuracy["black"].get("middlegame")
+    analysis_record.black_end_acc = phase_accuracy["black"].get("endgame")
+
     analysis_record.brilliant_count = int(total_counts["brilliant"])
     analysis_record.great_count = int(total_counts["great"])
     analysis_record.best_count = int(total_counts["best"])
@@ -364,6 +374,10 @@ def _build_game_review_payload(game_obj: Game, user) -> tuple[dict, SavedAnalysi
     analysis_record.miss_count = int(total_counts["miss"])
     analysis_record.mistake_count = int(total_counts["mistake"])
     analysis_record.blunder_count = int(total_counts["blunder"])
+    # Save opening info discovered during analysis
+    eco_from_pgn = parsed_game.headers.get("ECO", None)
+    analysis_record.opening = opening_name if opening_name != "Initial Position" else None
+    analysis_record.eco_code = eco_from_pgn
     analysis_record.save()
 
     # Identify user side and save accuracy to Game model
