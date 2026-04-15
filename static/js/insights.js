@@ -3,6 +3,10 @@
 (function () {
     'use strict';
 
+    function byId(id) {
+        return document.getElementById(id);
+    }
+
     // ── Chart.js defaults ──────────────────────────────────
     Chart.defaults.color = '#8a8480';
     Chart.defaults.font.family = "'Inter', sans-serif";
@@ -214,8 +218,10 @@
         const pText = document.querySelector('.pbar-text');
         if (pText) pText.textContent = "Connecting to engine...";
 
-        document.getElementById('btnSyncRecent').disabled = true;
-        document.getElementById('btnSyncMonth').disabled = true;
+        const btnSyncRecent = byId('btnSyncRecent');
+        const btnSyncMonth = byId('btnSyncMonth');
+        if (btnSyncRecent) btnSyncRecent.disabled = true;
+        if (btnSyncMonth) btnSyncMonth.disabled = true;
 
         fetch('/analysis/api/analyze-period/', {
             method: 'POST',
@@ -229,8 +235,8 @@
         .then(res => {
             isAnalyzing = false;
             hide('analysisProgress');
-            document.getElementById('btnSyncRecent').disabled = false;
-            document.getElementById('btnSyncMonth').disabled = false;
+            if (btnSyncRecent) btnSyncRecent.disabled = false;
+            if (btnSyncMonth) btnSyncMonth.disabled = false;
 
             if (res.status === 'complete' || res.status === 'success') {
                 const count = res.games_processed || res.processed_count || 0;
@@ -244,14 +250,16 @@
         .catch(err => {
             isAnalyzing = false;
             hide('analysisProgress');
-            document.getElementById('btnSyncRecent').disabled = false;
-            document.getElementById('btnSyncMonth').disabled = false;
+            if (btnSyncRecent) btnSyncRecent.disabled = false;
+            if (btnSyncMonth) btnSyncMonth.disabled = false;
             alert("Error running analysis batch.");
         });
     }
 
-    document.getElementById('btnSyncRecent').addEventListener('click', () => runAnalysisBatch('week'));
-    document.getElementById('btnSyncMonth').addEventListener('click', () => runAnalysisBatch('month'));
+    const btnSyncRecent = byId('btnSyncRecent');
+    const btnSyncMonth = byId('btnSyncMonth');
+    if (btnSyncRecent) btnSyncRecent.addEventListener('click', () => runAnalysisBatch('week'));
+    if (btnSyncMonth) btnSyncMonth.addEventListener('click', () => runAnalysisBatch('month'));
 
     // ── Summary ────────────────────────────────────────────
     function renderSummary(d) {
@@ -268,11 +276,17 @@
         setText('winRateBlack', `B: ${d.black_stats.win_rate}%`);
 
         // Best / worst game links
-        if (d.best_game_id) {
-            document.getElementById('statBestAcc').style.cursor = 'pointer';
-            document.getElementById('statBestAcc').onclick = () => {
-                window.location.href = `/analysis/game/${d.best_game_id}/`;
-            };
+        const statBestAcc = byId('statBestAcc');
+        if (statBestAcc) {
+            if (d.best_game_id) {
+                statBestAcc.style.cursor = 'pointer';
+                statBestAcc.onclick = () => {
+                    window.location.href = `/analysis/game/${d.best_game_id}/`;
+                };
+            } else {
+                statBestAcc.style.cursor = '';
+                statBestAcc.onclick = null;
+            }
         }
 
         // WDL bar
@@ -432,15 +446,21 @@
     // ── Openings table ─────────────────────────────────────
     function setOpeningColor(color) {
         activeColor = color;
-        document.getElementById('tabWhite').classList.toggle('active', color === 'white');
-        document.getElementById('tabBlack').classList.toggle('active', color === 'black');
+        const tabWhite = byId('tabWhite');
+        const tabBlack = byId('tabBlack');
+        if (tabWhite) tabWhite.classList.toggle('active', color === 'white');
+        if (tabBlack) tabBlack.classList.toggle('active', color === 'black');
         if (!activeUsername) return;
         fetchJSON(`/insights/api/openings/?username=${encodeURIComponent(activeUsername)}&color=${color}`)
             .then(renderOpenings);
     }
     
-    document.getElementById('tabWhite').addEventListener('click', () => setOpeningColor('white'));
-    document.getElementById('tabBlack').addEventListener('click', () => setOpeningColor('black'));
+    {
+        const tabWhite = byId('tabWhite');
+        const tabBlack = byId('tabBlack');
+        if (tabWhite) tabWhite.addEventListener('click', () => setOpeningColor('white'));
+        if (tabBlack) tabBlack.addEventListener('click', () => setOpeningColor('black'));
+    }
 
     function renderOpenings(data) {
         const tbody = document.getElementById('openingsBody');

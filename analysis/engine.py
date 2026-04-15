@@ -46,7 +46,7 @@ class StockfishManager:
         self.local_path = getattr(settings, "STOCKFISH_PATH", default_local)
         self.local_threads = int(getattr(settings, "ANALYSIS_ENGINE_THREADS", 1))
         self.local_hash = int(getattr(settings, "ANALYSIS_ENGINE_HASH", 32))
-        self.default_depth = int(getattr(settings, "ANALYSIS_ENGINE_DEPTH", 14))
+        self.default_depth = int(getattr(settings, "ANALYSIS_ENGINE_DEPTH", 16))
         self.default_time = float(getattr(settings, "ANALYSIS_ENGINE_TIME", 0.18))
 
     def get_health(self) -> dict[str, Any]:

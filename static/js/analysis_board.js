@@ -8,8 +8,12 @@ document.addEventListener('DOMContentLoaded', () => {
     let game = new Chess();
     let board = null;
     let orientation = 'white';
-    let positions = [game.fen()];  // FEN history
-    let currentPly = 0;
+    // Multi-line move history (mainline + variations)
+    // Each line stores its own FEN sequence; branching creates a new line instead of deleting future moves.
+    let lines = [];
+    let nextLineId = 1;
+    let currentLineId = 0;
+    let currentPly = 0; // index into line.fens
     let analyzing = false;
     let isSettingUp = window.ANALYSIS_MODE === 'fen';
 
@@ -42,11 +46,46 @@ document.addEventListener('DOMContentLoaded', () => {
         return resp.json();
     }
 
+    function fenKey(fen) {
+        return String(fen || '').split(' ').slice(0, 4).join(' ');
+    }
+
+    function getCurrentLine() {
+        return lines.find(l => l.id === currentLineId) || lines[0];
+    }
+
+    function resetLinesFromFen(fen) {
+        const startFen = fen || game.fen();
+        lines = [{
+            id: 0,
+            parentId: null,
+            branchPly: 0,
+            fens: [startFen],
+            sans: [],
+            ucis: [],
+        }];
+        nextLineId = 1;
+        currentLineId = 0;
+        currentPly = 0;
+    }
+
+    function findExistingLineForBranch(baseLine, branchPly, afterFen) {
+        const targetKey = fenKey(afterFen);
+        const prefixKeys = baseLine.fens.slice(0, branchPly + 1).map(fenKey);
+
+        return lines.find(l => {
+            if (l.fens.length <= branchPly + 1) return false;
+            for (let i = 0; i <= branchPly; i++) {
+                if (fenKey(l.fens[i]) !== prefixKeys[i]) return false;
+            }
+            return fenKey(l.fens[branchPly + 1]) === targetKey;
+        });
+    }
+
     // ── Init Board ──
     function initBoard(fen) {
         game = new Chess(fen || undefined);
-        positions = [game.fen()];
-        currentPly = 0;
+        resetLinesFromFen(game.fen());
 
         board = Chessboard('analysisBoard', {
             draggable: true,
@@ -64,7 +103,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (!isSettingUp) {
             renderMoveList();
-            analyzePosition(game.fen());
+            analyzePosition(getCurrentLine().fens[currentPly]);
         } else {
             evalRow.style.display = 'none';
             document.getElementById('engineLinesContainer').innerHTML = '';
@@ -90,16 +129,55 @@ document.addEventListener('DOMContentLoaded', () => {
             return; // allow anything
         }
 
+        const line = getCurrentLine();
+        const baseFen = line.fens[currentPly];
+        game = new Chess(baseFen);
+
         const move = game.move({ from: source, to: target, promotion: 'q' });
         if (!move) return 'snapback';
 
-        // Truncate future if we branched off
-        positions = positions.slice(0, currentPly + 1);
-        positions.push(game.fen());
-        currentPly = positions.length - 1;
+        const afterFen = game.fen();
+        const uci = `${move.from}${move.to}${move.promotion || ''}`;
+
+        const atEnd = currentPly === line.fens.length - 1;
+        if (atEnd) {
+            line.sans.push(move.san);
+            line.ucis.push(uci);
+            line.fens.push(afterFen);
+            currentPly = line.fens.length - 1;
+        } else {
+            const forwardKey = fenKey(line.fens[currentPly + 1]);
+            if (fenKey(afterFen) === forwardKey) {
+                // User played the existing mainline move — just advance
+                currentPly += 1;
+            } else {
+                const existing = findExistingLineForBranch(line, currentPly, afterFen);
+                if (existing) {
+                    currentLineId = existing.id;
+                    currentPly += 1;
+                } else {
+                    // Create a new variation line instead of truncating the current one
+                    const newLine = {
+                        id: nextLineId++,
+                        parentId: line.id,
+                        branchPly: currentPly,
+                        fens: line.fens.slice(0, currentPly + 1),
+                        sans: line.sans.slice(0, currentPly),
+                        ucis: line.ucis.slice(0, currentPly),
+                    };
+                    newLine.sans.push(move.san);
+                    newLine.ucis.push(uci);
+                    newLine.fens.push(afterFen);
+
+                    lines.push(newLine);
+                    currentLineId = newLine.id;
+                    currentPly = newLine.fens.length - 1;
+                }
+            }
+        }
 
         renderMoveList();
-        analyzePosition(game.fen());
+        analyzePosition(getCurrentLine().fens[currentPly]);
     }
 
     // ── Position analysis ──
@@ -187,18 +265,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ── Navigation ──
     function goTo(ply) {
-        ply = Math.max(0, Math.min(ply, positions.length - 1));
+        const line = getCurrentLine();
+        ply = Math.max(0, Math.min(ply, line.fens.length - 1));
         currentPly = ply;
-        game = new Chess(positions[ply]);
-        board.position(game.fen(), false);
-        highlightMove(ply);
-        analyzePosition(game.fen());
+        game = new Chess(line.fens[ply]);
+        board.position(line.fens[ply], false);
+        highlightMove(currentLineId, ply);
+        analyzePosition(line.fens[ply]);
+    }
+
+    function goToLinePly(lineId, ply) {
+        const line = lines.find(l => l.id === lineId);
+        if (!line) return;
+        currentLineId = lineId;
+        goTo(ply);
     }
 
     document.getElementById('abBtnStart').addEventListener('click', () => goTo(0));
     document.getElementById('abBtnPrev').addEventListener('click', () => goTo(currentPly - 1));
     document.getElementById('abBtnNext').addEventListener('click', () => goTo(currentPly + 1));
-    document.getElementById('abBtnEnd').addEventListener('click', () => goTo(positions.length - 1));
+    document.getElementById('abBtnEnd').addEventListener('click', () => {
+        const line = getCurrentLine();
+        goTo(line.fens.length - 1);
+    });
     document.getElementById('abBtnFlip').addEventListener('click', () => {
         orientation = orientation === 'white' ? 'black' : 'white';
         board.orientation(orientation);
@@ -216,61 +305,88 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ── Move list rendering ──
     function renderMoveList() {
-        if (positions.length <= 1) {
+        const main = lines.find(l => l.id === 0) || getCurrentLine();
+        if (!main || main.fens.length <= 1) {
             moveListCard.style.display = 'none';
             return;
         }
         moveListCard.style.display = 'block';
 
-        // Rebuild game from positions to get SAN notation
-        const tmpGame = new Chess(positions[0]);
-        let html = '';
-        let moveNum = 1;
+        function renderLine(line, startPly, isVariation) {
+            if (!line || line.fens.length <= startPly) return '';
+            let html = '';
+            let openRow = false;
+            let lastPlyRendered = null;
 
-        for (let i = 1; i < positions.length; i++) {
-            const prevGame = new Chess(positions[i - 1]);
-            const nextGame = new Chess(positions[i]);
+            for (let ply = startPly; ply < line.fens.length; ply++) {
+                lastPlyRendered = ply;
+                const san = line.sans[ply - 1] || '?';
+                const isActive = (line.id === currentLineId && ply === currentPly);
+                const cellHtml = `<span class="ab-move-cell${isActive ? ' active' : ''}" data-line-id="${line.id}" data-ply="${ply}">${san}</span>`;
 
-            // Figure out what move was made
-            const legalMoves = prevGame.moves({ verbose: true });
-            const move = legalMoves.find(m => {
-                const test = new Chess(positions[i - 1]);
-                test.move(m);
-                return test.fen().split(' ').slice(0, 4).join(' ') === nextGame.fen().split(' ').slice(0, 4).join(' ');
-            });
-            const san = move ? move.san : '?';
-
-            if (i % 2 === 1) {
-                // White's move — start new row
-                html += `<div class="ab-move-row"><span class="ab-move-num">${moveNum}.</span>`;
-                html += `<span class="ab-move-cell${currentPly === i ? ' active' : ''}" data-ply="${i}">${san}</span>`;
-            } else {
-                // Black's move
-                html += `<span class="ab-move-cell${currentPly === i ? ' active' : ''}" data-ply="${i}">${san}</span></div>`;
-                moveNum++;
+                if (ply % 2 === 1) {
+                    // White move starts a row
+                    const moveNum = Math.ceil(ply / 2);
+                    html += `<div class="ab-move-row"><span class="ab-move-num">${moveNum}.</span>`;
+                    html += cellHtml;
+                    openRow = true;
+                } else {
+                    const moveNum = ply / 2;
+                    if (!openRow) {
+                        // Variation can start on black to move
+                        html += `<div class="ab-move-row"><span class="ab-move-num">${moveNum}...</span>`;
+                        html += '<span class="ab-move-cell" style="visibility:hidden;">—</span>';
+                        html += cellHtml;
+                        html += '</div>';
+                    } else {
+                        // Black move closes the row
+                        html += cellHtml + '</div>';
+                    }
+                    openRow = false;
+                }
             }
+
+            if (openRow && lastPlyRendered !== null) {
+                html += '<span class="ab-move-cell" style="visibility:hidden;">—</span></div>';
+            }
+
+            const cls = isVariation ? 'ab-line-block variation' : 'ab-line-block';
+            return `<div class="${cls}">${html}</div>`;
         }
-        // Close row if last was white
-        if (positions.length % 2 === 0) {
-            html += '<span class="ab-move-cell" style="visibility:hidden;">—</span></div>';
-            // adjust moveNum not needed
+
+        let html = '';
+        html += renderLine(main, 1, false);
+
+        const variations = lines.filter(l => l.id !== main.id);
+        if (variations.length > 0) {
+            variations.sort((a, b) => a.id - b.id);
+            variations.forEach((line, idx) => {
+                const branchMovePly = (line.branchPly || 0) + 1;
+                const moveNum = Math.ceil(branchMovePly / 2);
+                const suffix = branchMovePly % 2 === 1 ? '.' : '...';
+                html += `<div class="ab-line-title">Variation ${idx + 1} (from ${moveNum}${suffix})</div>`;
+                html += renderLine(line, branchMovePly, true);
+            });
         }
 
         moveList.innerHTML = html;
 
-        // Click to navigate
-        moveList.querySelectorAll('.ab-move-cell[data-ply]').forEach(cell => {
-            cell.addEventListener('click', () => goTo(parseInt(cell.dataset.ply)));
+        // Click to navigate (ply within the clicked line)
+        moveList.querySelectorAll('.ab-move-cell[data-line-id][data-ply]').forEach(cell => {
+            cell.addEventListener('click', () => {
+                const lid = parseInt(cell.dataset.lineId || '0', 10);
+                const ply = parseInt(cell.dataset.ply || '0', 10);
+                goToLinePly(lid, ply);
+            });
         });
 
-        // Scroll active into view
         const active = moveList.querySelector('.ab-move-cell.active');
         if (active) active.scrollIntoView({ block: 'nearest' });
     }
 
-    function highlightMove(ply) {
+    function highlightMove(lineId, ply) {
         moveList.querySelectorAll('.ab-move-cell').forEach(c => c.classList.remove('active'));
-        const cell = moveList.querySelector(`.ab-move-cell[data-ply="${ply}"]`);
+        const cell = moveList.querySelector(`.ab-move-cell[data-line-id="${lineId}"][data-ply="${ply}"]`);
         if (cell) {
             cell.classList.add('active');
             cell.scrollIntoView({ block: 'nearest' });
@@ -309,21 +425,25 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            // Rebuild positions
+            // Rebuild mainline (line 0)
             const gameFromStart = new Chess();
-            const moves = tmpGame.history();
-            positions = [gameFromStart.fen()];
+            const moves = tmpGame.history({ verbose: true });
+            resetLinesFromFen(gameFromStart.fen());
+            const line0 = getCurrentLine();
 
-            moves.forEach(san => {
-                gameFromStart.move(san);
-                positions.push(gameFromStart.fen());
+            moves.forEach(m => {
+                gameFromStart.move(m);
+                line0.sans.push(m.san);
+                line0.ucis.push(`${m.from}${m.to}${m.promotion || ''}`);
+                line0.fens.push(gameFromStart.fen());
             });
 
-            game = new Chess(positions[0]);
+            game = new Chess(line0.fens[0]);
+            currentLineId = 0;
             currentPly = 0;
-            board.position(game.fen(), false);
+            board.position(line0.fens[0], false);
             renderMoveList();
-            analyzePosition(game.fen());
+            analyzePosition(line0.fens[0]);
 
             // Hide input card, show success
             document.getElementById('pgnInputCard').style.display = 'none';

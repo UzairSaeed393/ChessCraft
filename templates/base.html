@@ -152,6 +152,70 @@
     <script src="{% static 'js/script.js' %}"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        (function () {
+            if (window.__ccErrorReportingInstalled) return;
+            window.__ccErrorReportingInstalled = true;
+
+            function post(payload) {
+                try {
+                    payload = payload || {};
+                    payload.url = payload.url || window.location.href;
+                    payload.path = payload.path || window.location.pathname;
+                    payload.referrer = document.referrer || '';
+                    payload.viewport = { w: window.innerWidth, h: window.innerHeight };
+
+                    const body = JSON.stringify(payload);
+
+                    if (navigator.sendBeacon) {
+                        const blob = new Blob([body], { type: 'application/json' });
+                        navigator.sendBeacon('/api/client-error/', blob);
+                        return;
+                    }
+
+                    fetch('/api/client-error/', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body,
+                        keepalive: true,
+                    }).catch(function () { });
+                } catch (e) {
+                    // swallow
+                }
+            }
+
+            window.addEventListener('error', function (event) {
+                const err = event && event.error;
+                post({
+                    type: 'error',
+                    message: (event && event.message) || (err && err.message) || 'Unknown error',
+                    source: (event && event.filename) || '',
+                    lineno: (event && typeof event.lineno === 'number') ? event.lineno : undefined,
+                    colno: (event && typeof event.colno === 'number') ? event.colno : undefined,
+                    stack: (err && err.stack) || '',
+                });
+            });
+
+            window.addEventListener('unhandledrejection', function (event) {
+                const reason = event && event.reason;
+                let message = 'Unhandled rejection';
+                let stack = '';
+                if (reason && typeof reason === 'object') {
+                    message = reason.message || message;
+                    stack = reason.stack || '';
+                } else if (typeof reason === 'string') {
+                    message = reason;
+                }
+
+                post({
+                    type: 'unhandledrejection',
+                    message,
+                    source: 'promise',
+                    stack,
+                });
+            });
+        })();
+    </script>
     {% block extra_js %}{% endblock %}
 </body>
 
