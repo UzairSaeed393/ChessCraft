@@ -217,10 +217,15 @@ def _build_game_review_payload(game_obj, user, priority=0) -> tuple[dict, SavedA
         is_book = False
 
         # Retrieve cached batch results (0-indexed logic)
-        before_eval = batch_results[ply_index - 1]
-        cp_before = int(before_eval.get("evaluation_cp") or 0)
-        best_move_uci = before_eval.get("best_move") or ""
-        best_pv_uci = before_eval.get("pv") or []
+        if ply_index - 1 < len(batch_results):
+            before_eval = batch_results[ply_index - 1]
+            cp_before = int(before_eval.get("evaluation_cp") or 0)
+            best_move_uci = before_eval.get("best_move") or ""
+            best_pv_uci = before_eval.get("pv") or []
+        else:
+            cp_before = 0
+            best_move_uci = ""
+            best_pv_uci = []
 
         move_san = board.san(move)
         move_uci = move.uci()
@@ -229,9 +234,13 @@ def _build_game_review_payload(game_obj, user, priority=0) -> tuple[dict, SavedA
         after_board.push(move)
         fen_after = after_board.fen()
 
-        after_eval = batch_results[ply_index]
-        cp_after = int(after_eval.get("evaluation_cp") or 0)
-        follow_pv_uci = after_eval.get("pv") or []
+        if ply_index < len(batch_results):
+            after_eval = batch_results[ply_index]
+            cp_after = int(after_eval.get("evaluation_cp") or 0)
+            follow_pv_uci = after_eval.get("pv") or []
+        else:
+            cp_after = cp_before
+            follow_pv_uci = []
 
         if side == "white":
             cp_loss = max(0, cp_before - cp_after)
@@ -345,18 +354,70 @@ def _build_game_review_payload(game_obj, user, priority=0) -> tuple[dict, SavedA
     white_accuracy = accuracy_from_losses(side_stats["white"]["losses"])
     black_accuracy = accuracy_from_losses(side_stats["black"]["losses"])
 
+    # --- Game Result & Termination Logic ---
+    headers = parsed_game.headers
+    result = headers.get("Result", "*")
+    termination = headers.get("Termination", "Normal")
+    white_name = headers.get("White", "White")
+    black_name = headers.get("Black", "Black")
+
+    winner_name = None
+    if result == "1-0":
+        winner_name = white_name
+    elif result == "0-1":
+        winner_name = black_name
+
+    # Refine termination reason
+    res_reason = termination
+    if termination.lower() == "normal":
+        # Check if it was checkmate
+        if board.is_checkmate():
+            res_reason = "Checkmate"
+        elif board.is_stalemate():
+            res_reason = "Stalemate"
+        elif board.is_insufficient_material():
+            res_reason = "Insufficient Material"
+        else:
+            res_reason = "Normal"
+
+    final_result_text = ""
+    if winner_name:
+        final_result_text = f"{winner_name} won by {res_reason.lower()}"
+    else:
+        if result == "1/2-1/2":
+            final_result_text = f"Draw by {res_reason.lower()}"
+        else:
+            final_result_text = f"Game ended: {result}"
+
+    # Standardize result text for common terms
+    final_result_text = final_result_text.replace("by time forfeit", "by timeout")
+
     total_counts = defaultdict(int)
     for side in ("white", "black"):
         for name, value in side_stats[side]["counts"].items():
             total_counts[name] += value
 
+    data = {
+        "id": game_obj.game_id,
+        "date": game_obj.date_played.isoformat() if game_obj.date_played else None,
+        "white": {"name": game_obj.white_player, "accuracy": white_accuracy, "rating": game_obj.white_rating or 0},
+        "black": {"name": game_obj.black_player, "accuracy": black_accuracy, "rating": game_obj.black_rating or 0},
+        "moves": moves_payload,
+        "eval_history": eval_history,
+        "opening": opening_name,
+        "counts": dict(total_counts),
+        "result_text": final_result_text,
+    }
+
     phase_accuracy = {
         "white": {
             phase: accuracy_from_losses(side_stats["white"]["phase"][phase])
+            if side_stats["white"]["phase"][phase] else None
             for phase in PHASES
         },
         "black": {
             phase: accuracy_from_losses(side_stats["black"]["phase"][phase])
+            if side_stats["black"]["phase"][phase] else None
             for phase in PHASES
         },
     }
@@ -390,6 +451,8 @@ def _build_game_review_payload(game_obj, user, priority=0) -> tuple[dict, SavedA
     analysis_record.miss_count = int(total_counts["miss"])
     analysis_record.mistake_count = int(total_counts["mistake"])
     analysis_record.blunder_count = int(total_counts["blunder"])
+    analysis_record.result_reason = res_reason or "Normal"
+    
     # Save opening info discovered during analysis
     eco_from_pgn = parsed_game.headers.get("ECO", None)
     analysis_record.opening = opening_name if opening_name != "Initial Position" else None
@@ -464,7 +527,34 @@ def _build_game_review_payload(game_obj, user, priority=0) -> tuple[dict, SavedA
 
 @login_required
 def analysis_home(request):
-    return redirect('game')
+    return render(request, 'analysis/analysis_hub.html')
+
+
+@login_required
+def analysis_paste_pgn(request):
+    return render(request, 'analysis/analysis_board.html', {
+        'mode': 'pgn',
+        'page_title': 'Paste PGN',
+        'header_icon': 'clipboard-data-fill',
+    })
+
+
+@login_required
+def analysis_setup_position(request):
+    return render(request, 'analysis/analysis_board.html', {
+        'mode': 'fen',
+        'page_title': 'Setup Position',
+        'header_icon': 'grid-3x3-gap-fill',
+    })
+
+
+@login_required
+def analysis_new_game(request):
+    return render(request, 'analysis/analysis_board.html', {
+        'mode': 'new',
+        'page_title': 'New Game Analysis',
+        'header_icon': 'plus-circle-fill',
+    })
 
 
 @login_required
@@ -504,15 +594,43 @@ def run_full_game_review(request):
 @require_POST
 @api_error_handler
 def analyze_single_position(request):
-    body = _json_body(request)
-    fen = (body.get("fen") or "").strip()
-    if not fen:
-        return JsonResponse({"error": "fen is required"}, status=400)
+    try:
+        body = _json_body(request)
+        fen = (body.get("fen") or "").strip()
+        if not fen:
+            return JsonResponse({"error": "fen is required"}, status=400)
 
-    depth = body.get("depth")
-    manager = StockfishManager()
-    result = manager.get_analysis(fen, depth=depth, multipv=1, priority=0)
-    return JsonResponse({"status": "success", **result})
+        depth = body.get("depth")
+        multipv = min(int(body.get("multipv") or 1), 3)  # max 3 lines
+
+        manager = StockfishManager()
+
+        if multipv > 1:
+            # Multi-PV: get all lines from local engine
+            results = manager.get_analysis_multipv(fen, depth=depth, multipv=multipv, priority=0)
+            lines = []
+            for r in results:
+                pv_san = _to_san_line(fen, r.get("pv") or [], max_moves=8)
+                lines.append({
+                    "evaluation_cp": r.get("evaluation_cp", 0),
+                    "evaluation": r.get("evaluation", 0),
+                    "best_move": r.get("best_move", ""),
+                    "pv": r.get("pv", []),
+                    "pv_san": pv_san,
+                    "depth": r.get("depth"),
+                    "mate": r.get("mate"),
+                })
+            # Return first line as top-level for backward compatibility
+            top = lines[0] if lines else {}
+            return JsonResponse({"status": "success", **top, "lines": lines})
+        else:
+            result = manager.get_analysis(fen, depth=depth, multipv=1, priority=0)
+            pv_san = _to_san_line(fen, result.get("pv") or [], max_moves=8)
+            return JsonResponse({"status": "success", **result, "pv_san": pv_san, "lines": [{**result, "pv_san": pv_san}]})
+    except Exception as e:
+        import traceback
+        trace=traceback.format_exc()
+        return JsonResponse({"error": trace}, status=500)
 
 
 @login_required
@@ -616,6 +734,32 @@ def latest_saved_review(request, game_id: int):
     if record.full_payload:
         return JsonResponse({"status": "success", **record.full_payload})
 
+    # Use the game model's PGN to reconstruct headers if they aren't saved
+    final_result_text = game_obj.result
+    try:
+        if game_obj.pgn:
+            import io
+            import chess.pgn
+            parsed = chess.pgn.read_game(io.StringIO(game_obj.pgn))
+            if parsed:
+                res_code = parsed.headers.get("Result", "*")
+                termination = record.result_reason or parsed.headers.get("Termination", "Normal")
+                white_name = parsed.headers.get("White", "White")
+                black_name = parsed.headers.get("Black", "Black")
+                
+                winner = None
+                if res_code == "1-0": winner = white_name
+                elif res_code == "0-1": winner = black_name
+                
+                if winner:
+                    final_result_text = f"{winner} won by {termination.lower()}"
+                elif res_code == "1/2-1/2":
+                    final_result_text = f"Draw by {termination.lower()}"
+                
+                final_result_text = final_result_text.replace("by time forfeit", "by timeout")
+    except:
+        pass
+
     return JsonResponse(
         {
             "status": "success",
@@ -636,6 +780,7 @@ def latest_saved_review(request, game_id: int):
                 "mistake": record.mistake_count,
                 "blunder": record.blunder_count,
             },
+            "result_text": final_result_text,
         }
     )
 

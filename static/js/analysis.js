@@ -35,17 +35,30 @@
         blunder: 'Blunder',
     };
 
+    const categorySymbol = {
+        book: '📖',
+        brilliant: '!!',
+        great: '!',
+        best: '⭐',
+        excellent: '👍',
+        good: '✔️',
+        inaccuracy: '?!',
+        miss: 'X',
+        mistake: '?',
+        blunder: '??',
+    };
+
     const categoryIcon = {
         book: 'bi-book-fill',
         brilliant: 'bi-lightning-fill',
         great: 'bi-stars',
-        best: 'bi-check-circle-fill',
-        excellent: 'bi-check2-circle',
-        good: 'bi-check2',
-        inaccuracy: 'bi-exclamation-triangle-fill',
-        miss: 'bi-x-diamond-fill',
-        mistake: 'bi-x-circle-fill',
-        blunder: 'bi-exclamation-octagon-fill',
+        best: 'bi-star-fill',
+        excellent: 'bi-hand-thumbs-up-fill',
+        good: 'bi-check-lg',
+        inaccuracy: 'bi-question-diamond-fill',
+        miss: 'bi-x-lg',
+        mistake: 'bi-question-lg',
+        blunder: 'bi-exclamation-lg',
     };
 
     const state = {
@@ -135,8 +148,14 @@
         el.phaseEndWhite.textContent = `${Math.round(summary.phase_accuracy.white.endgame)}%`;
         el.phaseEndBlack.textContent = `${Math.round(summary.phase_accuracy.black.endgame)}%`;
 
+        if (summary.result_text) {
+            el.summaryText.innerHTML = `<span style="color:var(--review-accent); font-size: 1.2rem; font-weight:700; display:block; margin-bottom:4px;">${summary.result_text}</span>`;
+        } else {
+            el.summaryText.textContent = 'Review complete.';
+        }
+
         if (el.openingInfo) {
-            el.openingInfo.textContent = summary.opening_name || '--';
+            el.openingInfo.textContent = summary.opening || summary.opening_name || '--';
         }
 
         renderBreakdown(summary.counts);
@@ -190,17 +209,17 @@
         if (!square) return;
         const sqEl = document.querySelector(`#mainBoard .square-${square}`);
         if (!sqEl) {
-            // Retry once if chessboard.js hasn't finished rendering the DOM
             setTimeout(() => annotateSquare(square, classification), 50);
             return;
         }
 
         const key = String(classification || '').trim();
-        const icon = categoryIcon[key] || 'bi-dot';
+        const symbol = categorySymbol[key] || '';
+        if (!symbol) return;
 
         const marker = document.createElement('div');
-        marker.className = `move-annotation chip-${key || 'good'}`;
-        marker.innerHTML = `<i class="bi ${icon}"></i>`;
+        marker.className = `move-annotation cls-icon large cls-${key || 'good'}`;
+        marker.textContent = symbol;
         sqEl.appendChild(marker);
     }
 
@@ -239,20 +258,32 @@
     }
 
     async function postJson(url, payload) {
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': getCookie('csrftoken'),
-            },
-            body: JSON.stringify(payload),
-        });
+        try {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken'),
+                },
+                body: JSON.stringify(payload),
+            });
 
-        const data = await response.json();
-        if (!response.ok || data.error) {
-            throw new Error(data.error || 'Request failed');
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                throw new Error("Server is currently under heavy load or having connection issues. Please try again soon.");
+            }
+
+            const data = await response.json();
+            if (!response.ok || data.error) {
+                throw new Error(data.error || 'Request failed');
+            }
+            return data;
+        } catch (err) {
+            if (err.message.includes('Unexpected token')) {
+                throw new Error("Network issue or Engine busy. Please report if this persists.");
+            }
+            throw err;
         }
-        return data;
     }
 
     function formatEval(value) {
@@ -315,7 +346,10 @@
             const whiteCount = counts.white?.[key] || 0;
             const blackCount = counts.black?.[key] || 0;
             row.innerHTML = `
-                <div class="chip-${key}"><i class="bi ${categoryIcon[key] || 'bi-dot'}"></i><span>${categoryLabel[key]}</span></div>
+                <div class="chip-container">
+                    <span class="cls-icon cls-${key}">${categorySymbol[key] || ''}</span>
+                    <span class="chip-label">${categoryLabel[key]}</span>
+                </div>
                 <span>${whiteCount}</span>
                 <span>${blackCount}</span>
             `;
@@ -330,10 +364,13 @@
         btn.dataset.ply = String(move.ply);
 
         const sidePrefix = move.side === 'white' ? `${move.move_number}.` : `${move.move_number}...`;
-        const icon = categoryIcon[move.classification] || 'bi-dot';
+        const cls = move.classification || 'good';
         btn.innerHTML = `
             <span>${escapeHtml(sidePrefix)} ${movePieceImgHtml(move)} ${escapeHtml(sanDisplayText(move.san))}</span>
-            <div class="chip-${move.classification}"><i class="bi ${icon}"></i><span>${categoryLabel[move.classification] || move.classification}</span></div>
+            <div class="chip-container">
+                <span class="cls-icon cls-${cls}">${categorySymbol[cls] || ''}</span>
+                <span class="chip-label">${categoryLabel[cls] || cls}</span>
+            </div>
         `;
         return btn;
     }
@@ -347,8 +384,14 @@
 
     function setMoveDetails(move) {
         el.moveTitle.textContent = `Move ${move.move_number} (${move.side})`;
-        const icon = categoryIcon[move.classification] || 'bi-dot';
-        el.moveClass.innerHTML = `Category: <div class="chip-${move.classification}"><i class="bi ${icon}"></i><span>${categoryLabel[move.classification] || move.classification}</span></div>`;
+        const cls = move.classification || 'good';
+        el.moveClass.innerHTML = `
+            Category: 
+            <div class="chip-container" style="display:inline-flex; vertical-align:middle; margin-left:8px;">
+                <span class="cls-icon cls-${cls}">${categorySymbol[cls] || ''}</span>
+                <span class="chip-label">${categoryLabel[cls] || cls}</span>
+            </div>
+        `;
         el.moveDesc.textContent = move.explanation || 'No explanation available.';
         el.bestMove.textContent = move.best_move_san || move.best_move || '--';
         el.followLine.textContent = move.follow_line?.join(' ') || '--';
@@ -405,8 +448,14 @@
         state.board.position(data.after_fen, false);
 
         el.moveTitle.textContent = 'Alternative Move Review';
-        const icon = categoryIcon[data.classification] || 'bi-dot';
-        el.moveClass.innerHTML = `Category: <div class="chip-${data.classification}"><i class="bi ${icon}"></i><span>${categoryLabel[data.classification] || data.classification}</span></div>`;
+        const cls = data.classification || 'good';
+        el.moveClass.innerHTML = `
+            Category: 
+            <div class="chip-container" style="display:inline-flex; vertical-align:middle; margin-left:8px;">
+                <span class="cls-icon cls-${cls}">${categorySymbol[cls] || ''}</span>
+                <span class="chip-label">${categoryLabel[cls] || cls}</span>
+            </div>
+        `;
         el.moveDesc.textContent = data.explanation || 'No explanation available.';
         el.bestMove.textContent = data.best_line?.[0] || data.best_move || '--';
         el.followLine.textContent = data.follow_line?.join(' ') || '--';
@@ -487,6 +536,42 @@
         });
     }
 
+    function showErrorOverlay(message) {
+        const overlay = document.createElement('div');
+        overlay.id = 'errorOverlay';
+        overlay.style = `
+            position: absolute; top:0; left:0; width:100%; height:100%;
+            background: rgba(0,0,0,0.85); backdrop-filter: blur(4px);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            padding: 30px; text-align: center; z-index: 10000; border-radius: 16px;
+        `;
+        overlay.innerHTML = `
+            <i class="bi bi-exclamation-triangle-fill" style="font-size: 3rem; color: #e84040; margin-bottom: 20px;"></i>
+            <h3 style="color: #fff; margin-bottom: 12px;">Analysis Failed</h3>
+            <p style="color: #8a8480; max-width: 400px; margin-bottom: 30px;">
+                ${escapeHtml(message)}<br><br>
+                The engine might be busy or there's a connection problem.
+            </p>
+            <div style="display: flex; gap: 12px;">
+                <button id="btnRetryAnalysis" class="btn btn-primary" style="background:#81b64c; border:none; padding: 10px 24px; font-weight:700;">Retry</button>
+                <button id="btnCloseAnalysis" class="btn btn-secondary" style="background:#333; border:none; padding: 10px 24px; font-weight:700;">Back to Games</button>
+            </div>
+            <a href="/contact/" style="color: #29d0d0; margin-top: 25px; text-decoration: underline; font-size: 0.9rem;">Report this issue</a>
+        `;
+        
+        const container = document.querySelector('.review-shell') || document.body;
+        container.style.position = 'relative';
+        container.appendChild(overlay);
+
+        document.getElementById('btnRetryAnalysis').onclick = () => {
+            overlay.remove();
+            loadReviewData().catch(err => showErrorOverlay(err.message));
+        };
+        document.getElementById('btnCloseAnalysis').onclick = () => {
+            window.location.href = '/user/game/';
+        };
+    }
+
     async function loadReviewData() {
         el.summaryText.textContent = 'Preparing analysis...';
         startProgress();
@@ -528,6 +613,6 @@
     bindEvents();
 
     loadReviewData().catch((error) => {
-        el.summaryText.textContent = error.message || 'Could not generate review.';
+        showErrorOverlay(error.message);
     });
 })();

@@ -11,6 +11,8 @@ def api_error_handler(view_func):
         try:
             return view_func(request, *args, **kwargs)
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             return JsonResponse({
                 'error': 'Internal Error',
                 'message': 'An unexpected error occurred. Please report this together with the error details to chesscraftinfo@gmail.com.',

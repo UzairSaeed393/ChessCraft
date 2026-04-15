@@ -78,6 +78,23 @@
             hide('insLoading');
             show('insContent');
             
+            if (summary.total_games === 0) {
+                // Show Empty Insights State
+                const main = document.getElementById('insContent');
+                main.innerHTML = `
+                    <div style="text-align:center; padding: 60px 20px; color: var(--ins-muted);">
+                        <i class="bi bi-bar-chart-steps" style="font-size: 3.5rem; color: #333; margin-bottom: 20px; display:block;"></i>
+                        <h2 style="color:#fff; margin-bottom: 12px;">No Analyzed Games Found</h2>
+                        <p style="max-width: 500px; margin: 0 auto 30px; font-size: 1.1rem;">
+                            Insights are generated from your analyzed games. 
+                            Start reviewing your games to see your strengths and weaknesses.
+                        </p>
+                        <a href="/user/game/" class="err-btn retry" style="text-decoration:none; display:inline-block;">Go to My Games</a>
+                    </div>
+                `;
+                return;
+            }
+
             renderSummary(summary);
             renderTrend(trend);
             renderOpenings(openings);
@@ -91,21 +108,26 @@
         });
     }
 
-    function showErrorUI(msg) {
-        const content = document.getElementById('insContent');
-        if (content) {
-            content.innerHTML = `
-                <div class="error-container" style="text-align:center; padding: 50px; color: #e05555;">
-                    <h2 style="color: #fff; margin-bottom: 15px;">Dashboard Load Failed</h2>
-                    <p style="font-size: 1.1em; line-height: 1.6; color: #8a8480;">
-                        ${msg}<br>
-                        Please report this error to <a href="mailto:chesscraftinfo@gmail.com" style="color: #29d0d0;">chesscraftinfo@gmail.com</a> 
-                        or use our <a href="/contact/" style="color: #29d0d0;">Contact Page</a>.
-                    </p>
-                    <button onclick="window.location.reload()" class="action-btn" style="margin-top: 25px; background: #29d0d0; border:none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: 600;">Retry</button>
-                </div>
-            `;
-            show('insContent');
+    function showErrorUI(msg, details = '') {
+        hide('insLoading');
+        hide('insContent');
+        show('insError');
+        
+        setText('errDesc', msg || "We encountered an issue fetching your insights.");
+        
+        const btnRetry = document.getElementById('btnErrRetry');
+        if (btnRetry) {
+            btnRetry.onclick = () => {
+                hide('insError');
+                if (activeUsername) loadAll(activeUsername);
+            };
+        }
+        
+        const btnReport = document.getElementById('btnErrReport');
+        if (btnReport) {
+            btnReport.onclick = () => {
+                window.location.href = '/contact/';
+            };
         }
     }
 
@@ -145,7 +167,11 @@
                     const contentNode = card.querySelector('.content-node');
                     if (contentNode) {
                         contentNode.style.display = 'block';
-                        contentNode.innerHTML = `<div style="color:#e05555; font-size: 0.9em; padding: 10px; text-align:center;">Failed to load. <a href="/contact/" style="color:#29d0d0">Report?</a></div>`;
+                        contentNode.innerHTML = `
+                            <div class="card-error-hint" style="color:var(--ins-red); font-size: 0.85rem; padding: 20px; text-align:center; border: 1px dashed rgba(232,64,64,0.3); border-radius: 12px; background: rgba(232,64,64,0.02);">
+                                <i class="bi bi-exclamation-circle me-1"></i> Data unavailable. 
+                                <a href="/contact/" style="color:var(--ins-cyan); text-decoration: underline;">Report?</a>
+                            </div>`;
                     }
                 });
         });
@@ -229,13 +255,13 @@
 
     // ── Summary ────────────────────────────────────────────
     function renderSummary(d) {
-        setText('statAvgAcc', d.avg_accuracy + '%');
-        setText('statGames', d.total_games);
-        setText('statWinRate', d.win_rate + '%');
-        setText('statBestAcc', d.best_accuracy !== null ? d.best_accuracy + '%' : '--');
-        setText('statWorstAcc', d.worst_accuracy !== null ? d.worst_accuracy + '%' : '--');
-        setText('whiteAcc', d.white_accuracy + '%');
-        setText('blackAcc', d.black_accuracy + '%');
+        setText('statAvgAcc', (d.avg_accuracy ?? 0) + '%');
+        setText('statGames', d.total_games ?? 0);
+        setText('statWinRate', (d.win_rate ?? 0) + '%');
+        setText('statBestAcc', d.best_accuracy !== null && d.best_accuracy !== undefined ? d.best_accuracy + '%' : '--');
+        setText('statWorstAcc', d.worst_accuracy !== null && d.worst_accuracy !== undefined ? d.worst_accuracy + '%' : '--');
+        setText('whiteAcc', (d.white_accuracy ?? 0) + '%');
+        setText('blackAcc', (d.black_accuracy ?? 0) + '%');
         
         // Split winrates
         setText('winRateWhite', `W: ${d.white_stats.win_rate}%`);
@@ -361,17 +387,21 @@
                 datasets: [
                     {
                         label: 'White',
-                        data: [data.white.opening, data.white.middlegame, data.white.endgame],
+                        data: [data.white.opening || null, data.white.middlegame || null, data.white.endgame || null],
                         backgroundColor: 'rgba(210,180,60,0.8)',
                     },
                     {
                         label: 'Black',
-                        data: [data.black.opening, data.black.middlegame, data.black.endgame],
+                        data: [data.black.opening || null, data.black.middlegame || null, data.black.endgame || null],
                         backgroundColor: 'rgba(91,156,246,0.8)',
                     },
                     {
                         label: 'Overall',
-                        data: [data.overall.opening, data.overall.middlegame, data.overall.endgame],
+                        data: [
+                            data.overall.opening || null, 
+                            data.overall.middlegame || null, 
+                            data.overall.endgame || null
+                        ],
                         backgroundColor: 'rgba(255,255,255,0.15)',
                         borderColor: '#8a8480',
                         borderWidth: 1,
@@ -445,14 +475,29 @@
 
     // ── Helpers ────────────────────────────────────────────
     async function fetchJSON(url) {
-        const r = await fetch(url);
-        const data = await r.json();
-        if (!r.ok) {
-            const err = new Error(data.message || `Error ${r.status}`);
-            err.details = data.details;
+        try {
+            const r = await fetch(url);
+            const contentType = r.headers.get('content-type');
+            
+            if (!contentType || !contentType.includes('application/json')) {
+                // This is likely the HTML 500 error page
+                throw new Error("Server experiencing heavy load or connection issues. Please try again later.");
+            }
+
+            const data = await r.json();
+            if (!r.ok) {
+                const err = new Error(data.message || `Error ${r.status}`);
+                err.details = data.details;
+                throw err;
+            }
+            return data;
+        } catch (err) {
+            // Re-throw standardized errors
+            if (err.message.includes('Unexpected token')) {
+                throw new Error("Network issues or Engine busy. Report if this persists.");
+            }
             throw err;
         }
-        return data;
     }
     function show(id) { const e = document.getElementById(id); if (e) e.style.display = ''; }
     function hide(id) { const e = document.getElementById(id); if (e) e.style.display = 'none'; }

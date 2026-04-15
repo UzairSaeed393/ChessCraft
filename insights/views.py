@@ -23,6 +23,8 @@ def api_error_handler(view_func):
         try:
             return view_func(request, *args, **kwargs)
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             return JsonResponse({
                 'error': 'Internal Error',
                 'message': 'Oops! Something went wrong while processing your insights. Please report this to chesscraftinfo@gmail.com or via the Contact page.',
@@ -209,9 +211,9 @@ def api_summary(request):
             'win_rate': round(black_wins / max(black_wins + black_draws + black_losses, 1) * 100, 1) if (black_wins+black_draws+black_losses) > 0 else 0
         },
         'best_game_id': best_game_id,
-        'best_accuracy': round(best_acc, 1) if best_acc else None,
+        'best_accuracy': round(best_acc, 1) if best_acc is not None else None,
         'worst_game_id': worst_game_id,
-        'worst_accuracy': round(worst_acc, 1) if worst_acc else None,
+        'worst_accuracy': round(worst_acc, 1) if worst_acc is not None else None,
         'tips': tips,
         'move_counts': {
             'brilliant': agg['tot_brilliant'] or 0,
@@ -238,13 +240,26 @@ def api_trend(request):
     analyses = _get_analyses(request, username).order_by('game_date')
     data = []
     for a in analyses:
-        avg = round((a.white_accuracy + a.black_accuracy) / 2, 1)
-        opening = a.opening or _opening_from_pgn(a.pgn_data) or 'Unknown'
+        # Use null-safe accuracy calculation
+        w_acc = a.white_accuracy or 0.0
+        b_acc = a.black_accuracy or 0.0
+        avg = round((w_acc + b_acc) / 2, 1) if (w_acc or b_acc) else 0.0
+        
+        # Avoid expensive PGN parsing in loop; use saved opening if available
+        opening = a.opening or 'Unknown'
+        
+        # Defensive date handling
+        g_date = a.game_date
+        if not g_date and a.game:
+            g_date = a.game.date_played
+        
+        date_str = g_date.strftime('%Y-%m-%d') if g_date else 'Unknown'
+        
         data.append({
-            'date': a.game_date.strftime('%Y-%m-%d'),
+            'date': date_str,
             'accuracy': avg,
-            'white': round(a.white_accuracy, 1),
-            'black': round(a.black_accuracy, 1),
+            'white': round(w_acc, 1),
+            'black': round(b_acc, 1),
             'opening': opening,
             'game_id': a.game.id if a.game else None,
         })
@@ -338,19 +353,21 @@ def api_phases(request):
     )
 
     def _avg(a, b):
-        if a and b: return round((a + b) / 2, 1)
-        return round(a or b or 0, 1)
+        if a is not None and b is not None: return round((a + b) / 2, 1)
+        if a is not None: return round(a, 1)
+        if b is not None: return round(b, 1)
+        return None
 
     return JsonResponse({
         'white': {
-            'opening': round(agg['w_op'] or 0, 1),
-            'middlegame': round(agg['w_md'] or 0, 1),
-            'endgame': round(agg['w_en'] or 0, 1),
+            'opening': round(agg['w_op'], 1) if agg['w_op'] is not None else None,
+            'middlegame': round(agg['w_md'], 1) if agg['w_md'] is not None else None,
+            'endgame': round(agg['w_en'], 1) if agg['w_en'] is not None else None,
         },
         'black': {
-            'opening': round(agg['b_op'] or 0, 1),
-            'middlegame': round(agg['b_md'] or 0, 1),
-            'endgame': round(agg['b_en'] or 0, 1),
+            'opening': round(agg['b_op'], 1) if agg['b_op'] is not None else None,
+            'middlegame': round(agg['b_md'], 1) if agg['b_md'] is not None else None,
+            'endgame': round(agg['b_en'], 1) if agg['b_en'] is not None else None,
         },
         'overall': {
             'opening': _avg(agg['w_op'], agg['b_op']),

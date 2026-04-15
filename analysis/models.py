@@ -40,6 +40,8 @@ class SavedAnalysis(models.Model):
     # Opening info (populated from Lichess API / PGN headers during analysis)
     opening = models.CharField(max_length=255, blank=True, null=True)
     eco_code = models.CharField(max_length=10, blank=True, null=True)
+    
+    result_reason = models.CharField(max_length=255, blank=True, null=True)
 
     def __str__(self):
         return f"Analysis for {self.user.username} - {self.game_date.date()}"

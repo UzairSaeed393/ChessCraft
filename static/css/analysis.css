@@ -4,11 +4,50 @@
     --review-card-soft: #323232;
     --review-text: #f0f0f0;
     --review-muted: #b3b3b3;
-    --review-accent: #81b64c;
-    --review-cyan: #2bc9b5;
-    --review-red: #ff5a54;
-    --review-amber: #f7a84b;
-    --review-blue: #6aa2da;
+    --review-accent: #96bc4b;
+    --review-cyan: #1fb1a2;
+    --review-red: #ff5a5f;
+    --review-deep-red: #b33430;
+    --review-orange: #e6912c;
+    --review-yellow: #f1bd3e;
+    --review-blue: #5c8bb0;
+    --review-book: #d5a47d;
+}
+
+/* Category Colors */
+.cls-brilliant  { background-color: var(--review-cyan);   color: #fff; }
+.cls-great      { background-color: var(--review-blue);   color: #fff; }
+.cls-best       { background-color: var(--review-accent); color: #fff; }
+.cls-excellent  { background-color: var(--review-accent); color: #fff; }
+.cls-good       { background-color: var(--review-accent); color: #fff; }
+.cls-book       { background-color: var(--review-book);   color: #fff; }
+.cls-inaccuracy { background-color: var(--review-yellow); color: #222; }
+.cls-mistake    { background-color: var(--review-orange); color: #fff; }
+.cls-miss       { background-color: var(--review-red);    color: #fff; }
+.cls-blunder    { background-color: var(--review-deep-red); color: #fff; }
+
+.cls-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    font-size: 0.75rem;
+    font-weight: 800;
+    margin-right: 6px;
+    flex-shrink: 0;
+}
+
+.chip-container {
+    display: inline-flex;
+    align-items: center;
+    gap: 0;
+}
+
+.chip-label {
+    font-size: 0.85rem;
+    font-weight: 600;
 }
 
 .review-shell {

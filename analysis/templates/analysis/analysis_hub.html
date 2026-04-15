@@ -1,0 +1,184 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Analysis Hub — ChessCraft{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+<style>
+    .hub-shell {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 50px 20px 80px;
+        font-family: var(--font1);
+    }
+
+    .hub-header {
+        text-align: center;
+        margin-bottom: 50px;
+    }
+    .hub-header h1 {
+        font-size: 2.4rem;
+        font-weight: 700;
+        color: var(--primary);
+        margin: 0 0 12px;
+    }
+    .hub-header p {
+        font-size: 1.05rem;
+        color: var(--darktext);
+        max-width: 550px;
+        margin: 0 auto;
+        line-height: 1.6;
+        font-family: var(--font2);
+    }
+
+    .hub-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 24px;
+    }
+
+    .hub-card {
+        position: relative;
+        background: var(--bg2);
+        border: 1px solid rgba(0,0,0,0.06);
+        border-radius: 16px;
+        padding: 32px 28px;
+        text-decoration: none;
+        color: var(--darktext);
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        transition: transform 0.25s ease, box-shadow 0.25s ease;
+        overflow: hidden;
+    }
+    .hub-card:hover {
+        transform: translateY(-6px);
+        box-shadow: 0 10px 30px rgba(0,0,0,0.12);
+    }
+    .hub-card:active {
+        transform: translateY(-2px);
+    }
+
+    .hub-card .card-icon {
+        width: 55px;
+        height: 55px;
+        background: var(--primary);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 4px;
+    }
+    .hub-card .card-icon i {
+        font-size: 1.5rem;
+        color: var(--lighttext);
+    }
+
+    .hub-card h3 {
+        font-size: 1.15rem;
+        font-weight: 700;
+        color: var(--primary);
+        margin: 0;
+        font-family: var(--font1);
+    }
+    .hub-card p {
+        font-size: 0.9rem;
+        color: var(--darktext);
+        margin: 0;
+        line-height: 1.5;
+        font-family: var(--font2);
+    }
+
+    /* Active (clickable) card highlight */
+    .hub-card.active-card {
+        background: var(--bg1);
+        border-color: var(--primary);
+    }
+    .hub-card.active-card .card-icon {
+        box-shadow: 0 4px 15px rgba(10, 101, 58, 0.3);
+    }
+
+    /* Coming Soon badge */
+    .coming-soon {
+        position: absolute;
+        top: 16px;
+        right: 16px;
+        background: var(--btn1);
+        color: var(--lighttext);
+        font-size: 0.7rem;
+        font-weight: 700;
+        padding: 4px 10px;
+        border-radius: 20px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .hub-card.disabled {
+        opacity: 0.65;
+        cursor: default;
+        pointer-events: none;
+    }
+
+    /* Responsive */
+    @media (max-width: 650px) {
+        .hub-grid {
+            grid-template-columns: 1fr;
+        }
+        .hub-header h1 {
+            font-size: 1.8rem;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="hub-shell">
+
+    <div class="hub-header">
+        <h1><i class="bi bi-cpu" style="margin-right: 8px;"></i>Analysis Hub</h1>
+        <p>Choose how you'd like to analyze your chess games. Deep engine analysis powered by Stockfish.</p>
+    </div>
+
+    <div class="hub-grid">
+
+        <!-- Card 1: From Your Games (Active) -->
+        <a href="{% url 'game' %}" class="hub-card active-card" id="hubFromGames">
+            <div class="card-icon">
+                <i class="bi bi-collection-fill"></i>
+            </div>
+            <h3>From Your Games</h3>
+            <p>Select a game from your imported Chess.com library and get a full move-by-move review.</p>
+        </a>
+
+        <!-- Card 2: Paste PGN -->
+        <a href="{% url 'analysis_paste_pgn' %}" class="hub-card active-card" id="hubPastePgn">
+            <div class="card-icon">
+                <i class="bi bi-clipboard-data-fill"></i>
+            </div>
+            <h3>Paste PGN</h3>
+            <p>Paste any PGN text to instantly analyze a game from any platform or tournament.</p>
+        </a>
+
+        <!-- Card 3: Setup Position -->
+        <a href="{% url 'analysis_setup_position' %}" class="hub-card active-card" id="hubSetupPosition">
+            <div class="card-icon">
+                <i class="bi bi-grid-3x3-gap-fill"></i>
+            </div>
+            <h3>Setup a Position</h3>
+            <p>Enter a FEN string or set up pieces manually to analyze any custom position.</p>
+        </a>
+
+        <!-- Card 4: New Game -->
+        <a href="{% url 'analysis_new_game' %}" class="hub-card active-card" id="hubNewGame">
+            <div class="card-icon">
+                <i class="bi bi-plus-circle-fill"></i>
+            </div>
+            <h3>New Game Analysis</h3>
+            <p>Start from the initial position and explore lines with real-time engine evaluation.</p>
+        </a>
+
+    </div>
+
+</div>
+{% endblock %}

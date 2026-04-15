@@ -1,0 +1,436 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ page_title }} — ChessCraft{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+<link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
+<style>
+    .ab-shell {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 30px 20px 60px;
+        font-family: var(--font1);
+    }
+
+    .ab-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 24px;
+    }
+    .ab-header h1 {
+        font-size: 1.6rem;
+        font-weight: 700;
+        color: var(--primary);
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .ab-header .back-link {
+        color: var(--primary);
+        font-size: 0.9rem;
+        text-decoration: none;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-weight: 600;
+        transition: opacity 0.2s;
+    }
+    .ab-header .back-link:hover { opacity: 0.7; }
+
+    /* ── Layout: Board + Sidebar ── */
+    .ab-layout {
+        display: flex;
+        gap: 24px;
+        align-items: flex-start;
+    }
+
+    .ab-board-col {
+        flex-shrink: 0;
+        width: 480px;
+        position: relative;
+    }
+    .ab-board-wrap {
+        background: #2a2927;
+        padding: 4px;
+        border-radius: 6px;
+        overflow: hidden;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+        display: flex;
+    }
+    .ab-eval-bar-wrapper {
+        width: 16px;
+        background-color: #403e3c;
+        margin-right: 4px;
+        position: relative;
+        overflow: hidden;
+        border-radius: 2px;
+    }
+    .ab-eval-bar-fill {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        background-color: #fff; /* white's advantage is white fill from bottom */
+        transition: height 0.3s ease;
+        height: 50%; /* starts at 0.0 */
+    }
+    /* invert fill color if orientation is black */
+    .ab-board-col.flipped .ab-eval-bar-fill {
+        background-color: #333; /* black's advantage is dark fill when flipped? Wait, if flipped, bottom is black. It's easier to just manage height/color via JS */
+    }
+
+    #analysisBoard { flex: 1; height: auto; }
+    .white-1e1d7 { background-color: #f0d9b5 !important; color: #b58863; }
+    .black-3c85d { background-color: #b58863 !important; color: #f0d9b5; }
+
+
+    /* Eval bar */
+    .ab-eval-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-top: 10px;
+        padding: 8px 12px;
+        background: var(--bg2);
+        border-radius: 8px;
+        font-family: var(--font2);
+    }
+    .ab-eval-row .eval-label {
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: var(--darktext);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .ab-eval-row .eval-score {
+        font-size: 1.1rem;
+        font-weight: 800;
+        color: var(--primary);
+    }
+    .ab-eval-row .eval-depth {
+        font-size: 0.8rem;
+        color: #666;
+        margin-left: auto;
+    }
+    .ab-eval-row .best-move-text {
+        font-size: 0.85rem;
+        color: var(--darktext);
+        font-weight: 500;
+    }
+
+    /* Engine multi-lines */
+    .ab-lines-container {
+        margin-top: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+    .ab-engine-line {
+        background: var(--bg2);
+        border: 1px solid rgba(0,0,0,0.06);
+        border-radius: 8px;
+        padding: 8px 12px;
+        display: flex;
+        font-family: var(--font2);
+        font-size: 0.85rem;
+        gap: 12px;
+        align-items: center;
+    }
+    .ab-engine-line .line-eval {
+        font-weight: 700;
+        color: var(--primary);
+        width: 45px;
+        flex-shrink: 0;
+    }
+    .ab-engine-line .line-pv {
+        color: var(--darktext);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* Board nav buttons */
+    .ab-nav-row {
+        display: flex;
+        gap: 8px;
+        margin-top: 10px;
+    }
+    .ab-nav-btn {
+        flex: 1;
+        padding: 10px;
+        background: var(--bg2);
+        border: 1px solid rgba(0,0,0,0.06);
+        border-radius: 8px;
+        font-size: 1.1rem;
+        color: var(--primary);
+        cursor: pointer;
+        transition: background 0.15s, transform 0.1s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .ab-nav-btn:hover { background: var(--bg1); transform: translateY(-1px); }
+
+    /* ── Sidebar ── */
+    .ab-sidebar {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+    }
+
+    .ab-card {
+        background: var(--bg2);
+        border: 1px solid rgba(0,0,0,0.06);
+        border-radius: 14px;
+        padding: 20px;
+    }
+    .ab-card h3 {
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: var(--primary);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin: 0 0 12px;
+    }
+
+    /* PGN textarea */
+    .ab-textarea {
+        width: 100%;
+        min-height: 160px;
+        background: var(--mainbg);
+        border: 1px solid rgba(0,0,0,0.1);
+        border-radius: 8px;
+        padding: 12px;
+        font-family: 'Courier New', monospace;
+        font-size: 0.85rem;
+        color: var(--darktext);
+        resize: vertical;
+    }
+    .ab-textarea:focus {
+        outline: 2px solid var(--primary);
+        border-color: transparent;
+    }
+
+    /* FEN input */
+    .ab-input {
+        width: 100%;
+        background: var(--mainbg);
+        border: 1px solid rgba(0,0,0,0.1);
+        border-radius: 8px;
+        padding: 10px 12px;
+        font-family: 'Courier New', monospace;
+        font-size: 0.85rem;
+        color: var(--darktext);
+    }
+    .ab-input:focus {
+        outline: 2px solid var(--primary);
+        border-color: transparent;
+    }
+
+    /* Action buttons */
+    .ab-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 10px 20px;
+        border-radius: 8px;
+        border: none;
+        font-size: 0.9rem;
+        font-weight: 700;
+        cursor: pointer;
+        transition: transform 0.15s, box-shadow 0.15s;
+        font-family: var(--font1);
+    }
+    .ab-btn:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+    .ab-btn.primary { background: var(--primary); color: var(--lighttext); }
+    .ab-btn.secondary { background: var(--btn1); color: var(--lighttext); }
+    .ab-btn.outline { background: transparent; border: 2px solid var(--primary); color: var(--primary); }
+    .ab-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+    /* Move list */
+    .ab-move-list {
+        max-height: 300px;
+        overflow-y: auto;
+        font-family: var(--font2);
+        font-size: 0.85rem;
+    }
+    .ab-move-row {
+        display: flex;
+        gap: 4px;
+        padding: 3px 0;
+    }
+    .ab-move-num {
+        width: 30px;
+        color: #888;
+        font-weight: 600;
+        flex-shrink: 0;
+    }
+    .ab-move-cell {
+        flex: 1;
+        padding: 3px 8px;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: background 0.15s;
+        color: var(--darktext);
+    }
+    .ab-move-cell:hover { background: var(--bg1); }
+    .ab-move-cell.active { background: var(--primary); color: var(--lighttext); font-weight: 600; }
+
+    /* Status messages */
+    .ab-status {
+        padding: 12px 16px;
+        border-radius: 8px;
+        font-size: 0.9rem;
+        font-family: var(--font2);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .ab-status.info { background: var(--bg1); color: var(--darktext); }
+    .ab-status.success { background: #d4edda; color: #155724; }
+    .ab-status.error { background: #f8d7da; color: #721c24; }
+    .ab-status.loading { background: var(--bg2); color: var(--darktext); }
+    .ab-status .spinner {
+        width: 16px; height: 16px;
+        border: 2px solid rgba(0,0,0,0.1);
+        border-top-color: var(--primary);
+        border-radius: 50%;
+        animation: abspin 0.6s linear infinite;
+    }
+    @keyframes abspin { to { transform: rotate(360deg); } }
+
+    /* Flip board button */
+    .ab-flip-btn {
+        background: none; border: none; color: var(--primary);
+        font-size: 1.2rem; cursor: pointer; padding: 4px;
+        transition: transform 0.3s;
+    }
+    .ab-flip-btn:hover { transform: rotate(180deg); }
+
+    /* Responsive */
+    @media (max-width: 850px) {
+        .ab-layout { flex-direction: column; }
+        .ab-board-col { width: 100%; max-width: 480px; margin: 0 auto; }
+        .ab-sidebar { width: 100%; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ab-shell">
+
+    <div class="ab-header">
+        <h1><i class="bi bi-{{ header_icon }}"></i> {{ page_title }}</h1>
+        <a href="{% url 'analysis_home' %}" class="back-link">
+            <i class="bi bi-arrow-left"></i> Back to Hub
+        </a>
+    </div>
+
+    <div class="ab-layout">
+
+        <!-- Board Column -->
+        <div class="ab-board-col" id="boardCol">
+            <div class="ab-board-wrap">
+                <div class="ab-eval-bar-wrapper">
+                    <div class="ab-eval-bar-fill" id="evalBarFill"></div>
+                </div>
+                <div id="analysisBoard"></div>
+            </div>
+
+            <div class="ab-eval-row" id="evalRow" style="display:none;">
+                <span class="eval-label">Eval</span>
+                <span class="eval-score" id="evalScore">0.0</span>
+                <span class="best-move-text" id="bestMoveText"></span>
+                <span class="eval-depth" id="evalDepth"></span>
+            </div>
+
+            <div class="ab-lines-container" id="engineLinesContainer">
+                <!-- Lines injected here -->
+            </div>
+
+            <div class="ab-nav-row">
+                <button class="ab-nav-btn" id="abBtnStart" title="Start"><i class="bi bi-chevron-bar-left"></i></button>
+                <button class="ab-nav-btn" id="abBtnPrev" title="Previous"><i class="bi bi-chevron-left"></i></button>
+                <button class="ab-nav-btn" id="abBtnNext" title="Next"><i class="bi bi-chevron-right"></i></button>
+                <button class="ab-nav-btn" id="abBtnEnd" title="End"><i class="bi bi-chevron-bar-right"></i></button>
+                <button class="ab-flip-btn" id="abBtnFlip" title="Flip Board"><i class="bi bi-arrow-repeat"></i></button>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="ab-sidebar">
+
+            {% if mode == 'pgn' %}
+            <!-- Paste PGN Mode -->
+            <div class="ab-card" id="pgnInputCard">
+                <h3><i class="bi bi-clipboard-data me-1"></i> Paste Your PGN</h3>
+                <textarea class="ab-textarea" id="pgnInput" placeholder="Paste your PGN here...&#10;&#10;e.g.&#10;1. e4 e5 2. Nf3 Nc6 3. Bb5 a6..."></textarea>
+                <div style="margin-top: 12px; display:flex; gap: 8px;">
+                    <button class="ab-btn primary" id="btnLoadPgn"><i class="bi bi-play-fill"></i> Load & Analyze</button>
+                    <button class="ab-btn outline" id="btnClearPgn"><i class="bi bi-trash"></i> Clear</button>
+                </div>
+            </div>
+            {% endif %}
+
+            {% if mode == 'fen' %}
+            <!-- Setup Position Mode -->
+            <div class="ab-card" id="fenInputCard">
+                <h3><i class="bi bi-grid-3x3-gap me-1"></i> FEN Position</h3>
+                <input class="ab-input" id="fenInput" type="text"
+                       value="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+                       placeholder="Paste FEN string here...">
+                <div style="margin-top: 12px; display: flex; gap: 8px;">
+                    <button class="ab-btn primary" id="btnLoadFen"><i class="bi bi-play-fill"></i> Load & Analyze</button>
+                    <button class="ab-btn outline" id="btnResetFen"><i class="bi bi-arrow-counterclockwise"></i> Reset</button>
+                </div>
+            </div>
+            {% endif %}
+
+            {% if mode == 'new' %}
+            <!-- New Game Mode -->
+            <div class="ab-card">
+                <h3><i class="bi bi-plus-circle me-1"></i> Explore Freely</h3>
+                <p style="font-size: 0.9rem; color: var(--darktext); margin: 0 0 12px; font-family: var(--font2); line-height: 1.5;">
+                    Make moves on the board to explore openings and positions. Each move is analyzed in real-time by the engine.
+                </p>
+                <button class="ab-btn secondary" id="btnResetBoard"><i class="bi bi-arrow-counterclockwise"></i> Reset Board</button>
+            </div>
+            {% endif %}
+
+            <!-- Status -->
+            <div class="ab-status info" id="abStatus">
+                <i class="bi bi-info-circle"></i>
+                <span id="abStatusText">
+                    {% if mode == 'pgn' %}Paste a PGN above and click "Load & Analyze".
+                    {% elif mode == 'fen' %}Enter a FEN string above or use the default starting position.
+                    {% else %}Make a move on the board to begin analysis.
+                    {% endif %}
+                </span>
+            </div>
+
+            <!-- Move List -->
+            <div class="ab-card" id="moveListCard" style="display:none;">
+                <h3>Moves</h3>
+                <div class="ab-move-list" id="abMoveList"></div>
+            </div>
+
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+<script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+<script>
+    window.ANALYSIS_MODE = "{{ mode }}";
+</script>
+<script src="{% static 'js/analysis_board.js' %}"></script>
+{% endblock %}

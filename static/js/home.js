@@ -34,6 +34,7 @@ document.addEventListener('DOMContentLoaded', () => {
         game.reset();
         aiThinking = false;
         gameStarted = false;
+        removeErrorOverlay();
         
         board = Chessboard('homeBoard', {
             draggable: true,
@@ -46,17 +47,22 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         
         updateStatus("Your move! Good luck.");
-
-        // We no longer trigger AI move immediately if playing as black.
-        // The game starts when the user chooses or makes a move.
     }
 
     function onDragStart(source, piece, position, orientation) {
         if (aiThinking) return false;
         if (game.game_over()) return false;
-        // Don't let player move AI pieces
-        if ((game.turn() === 'w' && piece.search(/^b/) !== -1) ||
-            (game.turn() === 'b' && piece.search(/^w/) !== -1)) {
+
+        // Block: only allow the player to move THEIR color
+        const turnColor = game.turn() === 'w' ? 'white' : 'black';
+        if (turnColor !== playerColor) {
+            updateStatus("It's the AI's turn! Want to explore moves? Go to Analysis.", "thinking");
+            return false;
+        }
+
+        // Block: don't let player pick up opponent's pieces
+        if ((playerColor === 'white' && piece.search(/^b/) !== -1) ||
+            (playerColor === 'black' && piece.search(/^w/) !== -1)) {
             return false;
         }
     }
@@ -81,8 +87,9 @@ document.addEventListener('DOMContentLoaded', () => {
         board.position(game.fen());
     }
 
-    // Request Move from Server
-    async function triggerAIMove() {
+    // Request Move from Server — with silent retry
+    async function triggerAIMove(retryCount = 0) {
+        const MAX_RETRIES = 2;
         aiThinking = true;
         updateStatus("AI is thinking...", "thinking");
 
@@ -107,15 +114,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const aiMoveUci = data.best_move;
             if (aiMoveUci) {
-                // Parse UCI (e.g. e2e4 or e7e8q)
                 const fromSqr = aiMoveUci.substring(0, 2);
                 const toSqr = aiMoveUci.substring(2, 4);
                 const prom = aiMoveUci.length > 4 ? aiMoveUci.substring(4) : undefined;
                 
-                // Apply move to internal chess logic
                 game.move({ from: fromSqr, to: toSqr, promotion: prom });
-                
-                // Play move on UI board
                 board.position(game.fen());
 
                 aiThinking = false;
@@ -125,10 +128,76 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
         } catch (err) {
-            console.error(err);
-            updateStatus("Error fetching AI move: " + err.message, "error");
+            console.warn(`AI move fetch attempt ${retryCount + 1} failed:`, err.message);
+
+            // Silent retry up to MAX_RETRIES
+            if (retryCount < MAX_RETRIES) {
+                await new Promise(r => setTimeout(r, 1000)); // 1s delay between retries
+                return triggerAIMove(retryCount + 1);
+            }
+
+            // All retries exhausted — show error overlay
             aiThinking = false;
+            showErrorOverlay(err.message);
         }
+    }
+
+    // ── Error Overlay ─────────────────────────────────────
+    function showErrorOverlay(message) {
+        removeErrorOverlay();
+        
+        const overlay = document.createElement('div');
+        overlay.id = 'aiErrorOverlay';
+        overlay.innerHTML = `
+            <div class="ai-error-content">
+                <i class="bi bi-exclamation-triangle-fill" style="font-size: 2.5rem; color: #e84040; margin-bottom: 16px;"></i>
+                <h4>AI Move Failed</h4>
+                <p>The engine couldn't respond after multiple attempts.<br>
+                   <span style="color: #999; font-size: 0.85rem;">${escapeHtml(message)}</span>
+                </p>
+                <div style="display: flex; gap: 12px; margin-top: 20px;">
+                    <button id="btnReloadBoard" class="ai-err-btn primary">
+                        <i class="bi bi-arrow-repeat"></i> Reload Board
+                    </button>
+                    <a href="/contact/" class="ai-err-btn secondary">
+                        <i class="bi bi-flag"></i> Report Issue
+                    </a>
+                </div>
+            </div>
+        `;
+        
+        // Style the overlay inline (matches the dark theme)
+        Object.assign(overlay.style, {
+            position: 'absolute', top: '0', left: '0', width: '100%', height: '100%',
+            background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(4px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            zIndex: '100', borderRadius: '6px', textAlign: 'center', color: '#f0f0f0',
+        });
+        
+        const wrapper = document.querySelector('.board-wrapper');
+        wrapper.style.position = 'relative';
+        wrapper.appendChild(overlay);
+
+        document.getElementById('btnReloadBoard').addEventListener('click', () => {
+            removeErrorOverlay();
+            initBoard();
+            // If playing as black, trigger AI move for white
+            if (playerColor === 'black') {
+                gameStarted = true;
+                setTimeout(triggerAIMove, 250);
+            }
+        });
+    }
+
+    function removeErrorOverlay() {
+        const existing = document.getElementById('aiErrorOverlay');
+        if (existing) existing.remove();
+    }
+
+    function escapeHtml(str) {
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
     }
 
     function checkGameEnd() {

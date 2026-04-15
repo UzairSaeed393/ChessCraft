@@ -3,6 +3,9 @@ from . import views
 
 urlpatterns = [
     path('', views.analysis_home, name='analysis_home'),
+    path('paste-pgn/', views.analysis_paste_pgn, name='analysis_paste_pgn'),
+    path('setup-position/', views.analysis_setup_position, name='analysis_setup_position'),
+    path('new-game/', views.analysis_new_game, name='analysis_new_game'),
     path('game/<int:game_id>/', views.analysis_dashboard, name='analysis_dashboard'),
     path('api/analyze/', views.analyze_single_position, name='analyze_single_position'),
     path('api/review/start/', views.run_full_game_review, name='run_full_game_review'),
