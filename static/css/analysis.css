@@ -9,6 +9,7 @@
     --review-red: #ff5a5f;
     --review-deep-red: #b33430;
     --review-orange: #e6912c;
+    --review-amber: #f7a84b;
     --review-yellow: #f1bd3e;
     --review-blue: #5c8bb0;
     --review-book: #d5a47d;
@@ -372,7 +373,7 @@
 
 .review-stage {
     display: grid;
-    grid-template-columns: minmax(0, 1.9fr) minmax(320px, 1fr);
+    grid-template-columns: minmax(0, 2.7fr) minmax(280px, 1fr);
     gap: 20px;
 }
 
@@ -386,7 +387,7 @@
     display: flex;
     gap: 12px;
     align-items: stretch;
-    max-height: 78vh;
+    max-height: 85vh;
     width: 100%;
 }
 
@@ -425,10 +426,11 @@
 .main-board {
     width: 100%;
     height: 100%;
-    max-width: 78vh;
+    max-width: 90vh;
     aspect-ratio: 1 / 1;
     border-radius: 8px;
     overflow: hidden;
+    box-sizing: border-box;
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
     border: 4px solid #333;
 }
@@ -467,7 +469,12 @@
 
 #mainBoard .move-annotation.chip-book { background: #fff !important; color: #d5a56d !important; border-color: #d5a56d; }
 #mainBoard .move-annotation.chip-brilliant { background: #fff !important; color: var(--review-cyan) !important; border-color: var(--review-cyan); }
-#mainBoard .move-annotation.chip-best { background: #fff !important; color: #81b64c !important; border-color: #81b64c; }
+#mainBoard .move-annotation.chip-great { background: #fff !important; color: #98d2ff !important; border-color: #98d2ff; }
+#mainBoard .move-annotation.chip-best { background: #fff !important; color: #9be351 !important; border-color: #9be351; }
+#mainBoard .move-annotation.chip-excellent { background: #fff !important; color: #77d178 !important; border-color: #77d178; }
+#mainBoard .move-annotation.chip-good { background: #fff !important; color: #e6c86e !important; border-color: #e6c86e; }
+#mainBoard .move-annotation.chip-inaccuracy { background: #fff !important; color: #f7a84b !important; border-color: #f7a84b; }
+#mainBoard .move-annotation.chip-miss { background: #fff !important; color: #ffab85 !important; border-color: #ffab85; }
 #mainBoard .move-annotation.chip-mistake { background: #fff !important; color: #ff9a8d !important; border-color: #ff9a8d; }
 #mainBoard .move-annotation.chip-blunder { background: #fff !important; color: var(--review-red) !important; border-color: var(--review-red); }
 
@@ -475,7 +482,7 @@
     margin: 0;
 }
 
-/* Last-move highlight (chess.com-like) */
+/* Last-move highlight */
 #mainBoard .highlight-from {
     box-shadow: inset 0 0 0 4px rgba(129, 182, 76, 0.55);
 }
@@ -661,7 +668,7 @@
     .main-board {
         flex: 1;
         min-width: 0;
-        max-width: calc(100vw - 60px); /* Leave room for eval bar and container padding */
+        max-width: calc(100vw - 60px); 
         margin: 0 auto;
     }
 }

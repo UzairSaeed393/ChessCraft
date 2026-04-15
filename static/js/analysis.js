@@ -10,14 +10,10 @@
     }
 
     const categoryOrder = [
-        'brilliant',
-        'great',
         'best',
         'excellent',
-        'good',
         'book',
         'inaccuracy',
-        'miss',
         'mistake',
         'blunder',
     ];
@@ -286,20 +282,31 @@
         }
     }
 
-    function formatEval(value) {
+    function formatEval(value, mate = null) {
+        if (mate !== null && mate !== undefined) {
+            const m = Number(mate);
+            if (Number.isFinite(m)) {
+                return `M${m}`;
+            }
+        }
+
         const num = Number(value || 0);
+        if (Math.abs(num) >= 99) {
+            return num > 0 ? 'M?' : '-M?';
+        }
         const text = num.toFixed(2);
         return num > 0 ? `+${text}` : text;
     }
 
-    function setEvalBar(evalValue) {
+    function setEvalBar(evalValue, mate = null) {
         const v = Number(evalValue || 0);
-        const height = Math.max(4, Math.min(96, 50 + (v * 7)));
+        const scaled = Math.max(-12, Math.min(12, v));
+        const height = Math.max(4, Math.min(96, 50 + (scaled * 4.2)));
         if (el.evalFill) {
             el.evalFill.style.height = `${height}%`;
         }
         if (el.evalScore) {
-            el.evalScore.textContent = formatEval(v);
+            el.evalScore.textContent = formatEval(v, mate);
         }
     }
 
@@ -422,13 +429,13 @@
             el.moveDesc.textContent = 'Navigate moves or drag a piece to test alternatives.';
             el.bestMove.textContent = '--';
             el.followLine.textContent = '--';
-            setEvalBar(0);
+            setEvalBar(0, null);
             clearBoardHighlights();
             clearBoardAnnotations();
         } else {
             const move = state.reviewData.moves[targetPly - 1];
             setMoveDetails(move);
-            setEvalBar(move.evaluation_after);
+            setEvalBar(move.evaluation_after, move.mate_after);
             highlightUciMove(move.uci, move.classification);
         }
 
@@ -459,7 +466,7 @@
         el.moveDesc.textContent = data.explanation || 'No explanation available.';
         el.bestMove.textContent = data.best_line?.[0] || data.best_move || '--';
         el.followLine.textContent = data.follow_line?.join(' ') || '--';
-        setEvalBar(data.evaluation);
+        setEvalBar(data.evaluation, data.mate);
         el.resetLineBtn.hidden = false;
         highlightUciMove(moveUci, data.classification);
     }

@@ -356,7 +356,7 @@
         const ctx = document.getElementById('breakdownChart');
         if (!ctx) return;
 
-        const catOrder = ['brilliant','great','best','excellent','good','book','inaccuracy','miss','mistake','blunder'];
+        const catOrder = ['best','excellent','book','inaccuracy','mistake','blunder'];
         const values = catOrder.map(k => data[k] || 0);
         const total = values.reduce((sum, val) => sum + val, 0) || 1;
         // Include the count and percentage directly in the legend label

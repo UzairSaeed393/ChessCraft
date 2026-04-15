@@ -7,6 +7,7 @@ from collections import defaultdict
 import chess
 import chess.pgn
 import requests
+from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -17,14 +18,19 @@ from ChessCraft.utils import api_error_handler
 
 from user.models import Game
 
-from .engine import StockfishManager, accuracy_from_losses, classify_move
+from .engine import (
+    StockfishManager,
+    accuracy_from_move_accuracies,
+    classify_move,
+    move_accuracy_from_category,
+)
 from .models import MoveAnalysis, SavedAnalysis
 
 
 CATEGORIES = [
     "brilliant",
-    "great",
     "best",
+    "great",
     "excellent",
     "good",
     "book",
@@ -32,9 +38,11 @@ CATEGORIES = [
     "miss",
     "mistake",
     "blunder",
-];
+]
 
 PHASES = ["opening", "middlegame", "endgame"]
+REVIEW_ALGO_VERSION = 5
+OPENING_API_BLOCKED = False
 
 
 def _json_body(request):
@@ -115,10 +123,19 @@ def _build_move_explanation(
         return f"{move_san} missed a tactical chance. Engine preferred {best_san} to gain more advantage."
     if category == "mistake":
         return f"{move_san} is a mistake and gives up a noticeable edge. Better was {best_san}."
-    return f"{move_san} is a blunder. {best_san} was critical to avoid a major swing."
+    if category == "blunder":
+        return f"{move_san} is a blunder. {best_san} was critical to avoid a major swing."
+    if category == "book":
+        return f"{move_san} is a standard opening book move."
+    
+    return f"{move_san} was played."
 
 def _fetch_opening_info(session: requests.Session, fen: str, move_uci: str = None) -> dict:
     """Fetch opening name and check if move_uci is theoretical via Lichess."""
+    global OPENING_API_BLOCKED
+    if OPENING_API_BLOCKED:
+        return {"name": None, "eco": None, "is_theory": False, "failed": True}
+
     try:
         url = "https://explorer.lichess.ovh/masters"
         # Always use params so requests correctly urlencodes the FEN
@@ -142,18 +159,19 @@ def _fetch_opening_info(session: requests.Session, fen: str, move_uci: str = Non
                 "is_theory": is_book,
                 "failed": False
             }
-        else:
-            print(f"Lichess API returned {resp.status_code}")
-    except Exception as e:
-        print(f"Lichess API Exception: {e}")
+        if resp.status_code in (401, 403):
+            OPENING_API_BLOCKED = True
+    except Exception:
+        pass
     return {"name": None, "eco": None, "is_theory": False, "failed": True}
 
 
 def _empty_side_stats():
     return {
-        "losses": [],
+        "move_accuracies": [],
         "counts": {key: 0 for key in CATEGORIES},
         "phase": {name: [] for name in PHASES},
+        "severe_streak": 0,
     }
 
 
@@ -167,6 +185,11 @@ def _parse_pgn_or_raise(pgn_text: str):
 def _build_game_review_payload(game_obj, user, priority=0) -> tuple[dict, SavedAnalysis]:
     engine = StockfishManager()
     parsed_game = _parse_pgn_or_raise(game_obj.pgn or "")
+
+    # Use a deeper search for full game review only.
+    # Live board/position analysis still uses the regular engine default depth.
+    review_depth = int(getattr(settings, "ANALYSIS_GAME_REVIEW_DEPTH", 20))
+    review_depth = max(16, review_depth)
 
     board = parsed_game.board()
     start_fen = board.fen()
@@ -202,7 +225,12 @@ def _build_game_review_payload(game_obj, user, priority=0) -> tuple[dict, SavedA
 
     # 2. Send all FENs to engine in a single batch request
     print(f"Batch analyzing {len(all_fens)} positions with priority {priority}...")
-    batch_results = engine.analyze_batch(all_fens, multipv=1, priority=priority)
+    batch_results = engine.analyze_batch(
+        all_fens,
+        depth=review_depth,
+        multipv=1,
+        priority=priority,
+    )
 
     session = requests.Session()
     # Add a custom User-Agent to avoid Lichess blocking the default python-requests UA
@@ -238,9 +266,13 @@ def _build_game_review_payload(game_obj, user, priority=0) -> tuple[dict, SavedA
             after_eval = batch_results[ply_index]
             cp_after = int(after_eval.get("evaluation_cp") or 0)
             follow_pv_uci = after_eval.get("pv") or []
+            mate_after = after_eval.get("mate")
         else:
             cp_after = cp_before
             follow_pv_uci = []
+            mate_after = None
+
+        mate_before = before_eval.get("mate") if ply_index - 1 < len(batch_results) else None
 
         if side == "white":
             cp_loss = max(0, cp_before - cp_after)
@@ -263,9 +295,13 @@ def _build_game_review_payload(game_obj, user, priority=0) -> tuple[dict, SavedA
                     in_book = False
             else:
                 if info["is_theory"]:
-                    is_book = True
-                    if info["name"]:
-                        opening_name = info["name"]
+                    # Treat as book only if the move does not already lose too much.
+                    if cp_loss <= 40:
+                        is_book = True
+                        if info["name"]:
+                            opening_name = info["name"]
+                    else:
+                        in_book = False
                 else:
                     in_book = False
         else:
@@ -280,12 +316,31 @@ def _build_game_review_payload(game_obj, user, priority=0) -> tuple[dict, SavedA
             best_move_uci=best_move_uci,
             board_before=board,
             is_book=is_book,
+            cp_before=cp_before,
+            cp_after=cp_after,
+            side=side,
+            mate_before=mate_before,
+            mate_after=mate_after,
         )
 
         # Book moves don't count towards accuracy loss
         if category == "book":
             cp_loss = 0
             cp_gain = 0
+
+        if category in {"mistake", "blunder"}:
+            side_stats[side]["severe_streak"] += 1
+        else:
+            side_stats[side]["severe_streak"] = 0
+
+        move_accuracy = move_accuracy_from_category(
+            category=category,
+            cp_loss=cp_loss,
+            side=side,
+            mate_before=mate_before,
+            mate_after=mate_after,
+            severe_streak=side_stats[side]["severe_streak"],
+        )
 
         best_san = "(none)"
         if best_move_uci:
@@ -307,9 +362,9 @@ def _build_game_review_payload(game_obj, user, priority=0) -> tuple[dict, SavedA
         best_line_san = _to_san_line(fen_before, best_pv_uci)
         follow_line_san = _to_san_line(fen_after, follow_pv_uci)
 
-        side_stats[side]["losses"].append(cp_loss)
+        side_stats[side]["move_accuracies"].append(move_accuracy)
+        side_stats[side]["phase"][phase].append(move_accuracy)
         side_stats[side]["counts"][category] += 1
-        side_stats[side]["phase"][phase].append(cp_loss)
 
         moves_payload.append(
             {
@@ -323,6 +378,8 @@ def _build_game_review_payload(game_obj, user, priority=0) -> tuple[dict, SavedA
                 "fen_after": fen_after,
                 "evaluation_before": round(cp_before / 100.0, 2),
                 "evaluation_after": round(cp_after / 100.0, 2),
+                "mate_before": mate_before,
+                "mate_after": mate_after,
                 "centipawn_loss": cp_loss,
                 "classification": category,
                 "best_move": best_move_uci,
@@ -351,8 +408,8 @@ def _build_game_review_payload(game_obj, user, priority=0) -> tuple[dict, SavedA
     if move_rows:
         MoveAnalysis.objects.bulk_create(move_rows)
 
-    white_accuracy = accuracy_from_losses(side_stats["white"]["losses"])
-    black_accuracy = accuracy_from_losses(side_stats["black"]["losses"])
+    white_accuracy = accuracy_from_move_accuracies(side_stats["white"]["move_accuracies"])
+    black_accuracy = accuracy_from_move_accuracies(side_stats["black"]["move_accuracies"])
 
     # --- Game Result & Termination Logic ---
     headers = parsed_game.headers
@@ -411,12 +468,12 @@ def _build_game_review_payload(game_obj, user, priority=0) -> tuple[dict, SavedA
 
     phase_accuracy = {
         "white": {
-            phase: accuracy_from_losses(side_stats["white"]["phase"][phase])
+            phase: accuracy_from_move_accuracies(side_stats["white"]["phase"][phase])
             if side_stats["white"]["phase"][phase] else None
             for phase in PHASES
         },
         "black": {
-            phase: accuracy_from_losses(side_stats["black"]["phase"][phase])
+            phase: accuracy_from_move_accuracies(side_stats["black"]["phase"][phase])
             if side_stats["black"]["phase"][phase] else None
             for phase in PHASES
         },
@@ -503,6 +560,7 @@ def _build_game_review_payload(game_obj, user, priority=0) -> tuple[dict, SavedA
     }
 
     payload = {
+        "algo_version": REVIEW_ALGO_VERSION,
         "analysis_id": analysis_record.id,
         "game": {
             "id": game_obj.id,
@@ -582,7 +640,11 @@ def run_full_game_review(request):
 
     # Check if we already have a saved full payload
     existing_record = SavedAnalysis.objects.filter(user=request.user, game=game_obj).order_by("-id").first()
-    if existing_record and existing_record.full_payload:
+    if (
+        existing_record
+        and existing_record.full_payload
+        and existing_record.full_payload.get("algo_version") == REVIEW_ALGO_VERSION
+    ):
         return JsonResponse({"status": "success", **existing_record.full_payload})
 
     # Priority 0: Manual user-initiated review gets top priority in the queue
@@ -650,11 +712,14 @@ def analyze_variation(request):
         if move not in board.legal_moves:
             return JsonResponse({"error": "Illegal move for this position"}, status=400)
 
+        move_san = board.san(move)
+
         manager = StockfishManager()
         side = "white" if board.turn else "black"
 
         before_eval = manager.get_analysis(fen, multipv=1, priority=0)
         cp_before = int(before_eval.get("evaluation_cp") or 0)
+        mate_before = before_eval.get("mate")
         best_move_uci = before_eval.get("best_move") or ""
         best_line = _to_san_line(fen, before_eval.get("pv") or [])
 
@@ -663,6 +728,7 @@ def analyze_variation(request):
 
         after_eval = manager.get_analysis(after_fen, multipv=1, priority=0)
         cp_after = int(after_eval.get("evaluation_cp") or 0)
+        mate_after = after_eval.get("mate")
         follow_line = _to_san_line(after_fen, after_eval.get("pv") or [])
 
         if side == "white":
@@ -681,6 +747,11 @@ def analyze_variation(request):
             move_uci=move_uci,
             best_move_uci=best_move_uci,
             board_before=chess.Board(fen),
+            cp_before=cp_before,
+            cp_after=cp_after,
+            side=side,
+            mate_before=mate_before,
+            mate_after=mate_after,
         )
 
         best_san = "(none)"
@@ -708,10 +779,13 @@ def analyze_variation(request):
                 "after_fen": after_fen,
                 "evaluation_cp": cp_after,
                 "evaluation": round(cp_after / 100.0, 2),
+                "mate": mate_after,
+                "mate_before": mate_before,
                 "best_move": best_move_uci,
                 "best_line": best_line,
                 "follow_line": follow_line,
                 "classification": category,
+                "is_best": bool(best_move_uci and move_uci == best_move_uci),
                 "centipawn_loss": cp_loss,
                 "explanation": explanation,
             }
@@ -851,4 +925,4 @@ def api_analyze_period(request):
 def api_engine_health(request):
     """Bridge to check remote engine health from frontend."""
     manager = StockfishManager()
-    return JsonResponse(manager.get_health())
+    return JsonResponse(manager.get_health())

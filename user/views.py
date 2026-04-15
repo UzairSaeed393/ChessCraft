@@ -3,9 +3,10 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth import logout
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.core.paginator import Paginator
 from django.views.decorators.http import require_POST
+from analysis.models import SavedAnalysis
 from .utils import fetch_and_save_games
 from .models import Game
 
@@ -16,8 +17,16 @@ def profile_view(request):
         action = (request.POST.get('action') or '').strip()
 
         if action == 'delete_all_games':
-            deleted_count, _ = Game.objects.filter(user=request.user).delete()
-            messages.success(request, f"Removed {deleted_count} game(s).")
+            with transaction.atomic():
+                analyses_qs = SavedAnalysis.objects.filter(user=request.user)
+                analyses_count = analyses_qs.count()
+                analyses_qs.delete()
+
+                games_qs = Game.objects.filter(user=request.user)
+                games_count = games_qs.count()
+                games_qs.delete()
+
+            messages.success(request, f"Removed {games_count} game(s) and {analyses_count} analysis record(s).")
             return redirect('profile')
 
         if action == 'delete_games_for_username':
@@ -26,11 +35,26 @@ def profile_view(request):
                 messages.error(request, 'Please select a Chess.com username.')
                 return redirect('profile')
 
-            deleted_count, _ = Game.objects.filter(
+            games_qs = Game.objects.filter(
                 user=request.user,
                 chess_username_at_time__iexact=chess_username,
-            ).delete()
-            messages.success(request, f"Removed {deleted_count} game(s) for {chess_username}.")
+            )
+            game_ids = list(games_qs.values_list('id', flat=True))
+
+            with transaction.atomic():
+                analyses_count = 0
+                if game_ids:
+                    analyses_qs = SavedAnalysis.objects.filter(user=request.user, game_id__in=game_ids)
+                    analyses_count = analyses_qs.count()
+                    analyses_qs.delete()
+
+                games_count = games_qs.count()
+                games_qs.delete()
+
+            messages.success(
+                request,
+                f"Removed {games_count} game(s) and {analyses_count} analysis record(s) for {chess_username}.",
+            )
             return redirect('profile')
 
         messages.error(request, 'Invalid action.')

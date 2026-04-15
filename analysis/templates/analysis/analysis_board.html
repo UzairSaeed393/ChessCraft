@@ -50,7 +50,7 @@
 
     .ab-board-col {
         flex-shrink: 0;
-        width: 480px;
+        width: 420px;
         position: relative;
     }
     .ab-board-wrap {
@@ -261,7 +261,12 @@
         overflow-y: auto;
         font-family: var(--font2);
         font-size: 0.85rem;
+        padding-right: 6px;
     }
+    .ab-move-list::-webkit-scrollbar { width: 6px; }
+    .ab-move-list::-webkit-scrollbar-track { background: rgba(0,0,0,0.05); border-radius: 4px; }
+    .ab-move-list::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 4px; }
+    .ab-move-list::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.25); }
     .ab-line-title {
         margin: 10px 0 6px;
         font-size: 0.75rem;
@@ -331,18 +336,18 @@
     /* Responsive */
     @media (max-width: 850px) {
         .ab-layout { flex-direction: column; }
-        .ab-board-col { width: 100%; max-width: 480px; margin: 0 auto; }
+        .ab-board-col { width: 100%; max-width: 420px; margin: 0 auto; }
         .ab-sidebar { width: 100%; }
     }
 
     /* Mode tweaks: keep PGN board smaller so moves/buttons stay in view */
     .ab-shell.ab-mode-pgn .ab-board-col {
-        width: 410px;
+        width: 360px;
     }
     @media (max-width: 1050px) {
         .ab-shell.ab-mode-pgn .ab-board-col {
             width: 100%;
-            max-width: 440px;
+            max-width: 380px;
             margin: 0 auto;
         }
     }
@@ -381,13 +386,6 @@
                 <!-- Lines injected here -->
             </div>
 
-            <div class="ab-nav-row">
-                <button class="ab-nav-btn" id="abBtnStart" title="Start"><i class="bi bi-chevron-bar-left"></i></button>
-                <button class="ab-nav-btn" id="abBtnPrev" title="Previous"><i class="bi bi-chevron-left"></i></button>
-                <button class="ab-nav-btn" id="abBtnNext" title="Next"><i class="bi bi-chevron-right"></i></button>
-                <button class="ab-nav-btn" id="abBtnEnd" title="End"><i class="bi bi-chevron-bar-right"></i></button>
-                <button class="ab-flip-btn" id="abBtnFlip" title="Flip Board"><i class="bi bi-arrow-repeat"></i></button>
-            </div>
         </div>
 
         <!-- Sidebar -->
@@ -445,6 +443,14 @@
             <div class="ab-card" id="moveListCard" style="display:none;">
                 <h3>Moves</h3>
                 <div class="ab-move-list" id="abMoveList"></div>
+                
+                <div class="ab-nav-row" style="margin-top: 16px;">
+                    <button class="ab-nav-btn" id="abBtnStart" title="Start"><i class="bi bi-chevron-bar-left"></i></button>
+                    <button class="ab-nav-btn" id="abBtnPrev" title="Previous"><i class="bi bi-chevron-left"></i></button>
+                    <button class="ab-nav-btn" id="abBtnNext" title="Next"><i class="bi bi-chevron-right"></i></button>
+                    <button class="ab-nav-btn" id="abBtnEnd" title="End"><i class="bi bi-chevron-bar-right"></i></button>
+                    <button class="ab-flip-btn" id="abBtnFlip" title="Flip Board" style="margin-left:8px;"><i class="bi bi-arrow-repeat"></i></button>
+                </div>
             </div>
 
         </div>

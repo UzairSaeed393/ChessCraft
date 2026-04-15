@@ -26,6 +26,8 @@ ALLOWED_HOSTS = ['20.189.112.196','chesscraft.me', 'www.chesscraft.me', 'localho
 ANALYSIS_ENGINE_MODE = env('ANALYSIS_ENGINE_MODE', default='local')
 ANALYSIS_ENGINE_URL = env('ANALYSIS_ENGINE_URL', default='')
 ANALYSIS_ENGINE_TOKEN = env('ANALYSIS_ENGINE_TOKEN', default='')
+# Full game review depth (batch review only). Live/single-position endpoints still use ANALYSIS_ENGINE_DEPTH.
+ANALYSIS_GAME_REVIEW_DEPTH = env.int('ANALYSIS_GAME_REVIEW_DEPTH', default=20)
 
 # 4. Site Identification
 SITE_ID = env.int('SITE_ID', default=1)

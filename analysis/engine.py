@@ -481,6 +481,11 @@ def classify_move(
     best_move_uci: str,
     board_before: chess.Board,
     is_book: bool = False,
+    cp_before: int | None = None,
+    cp_after: int | None = None,
+    side: str | None = None,
+    mate_before: int | None = None,
+    mate_after: int | None = None,
 ) -> str:
     if is_book:
         return "book"
@@ -489,31 +494,117 @@ def classify_move(
     best_move_uci = (best_move_uci or "").strip()
     is_best = move_uci and move_uci == best_move_uci
 
-    if is_best and cp_loss <= 20:
-        try:
-            if is_sacrifice_move(board_before, chess.Move.from_uci(move_uci)):
-                return "brilliant"
-        except ValueError:
-            pass
+    cp_before_pov = 0
+    cp_after_pov = 0
+    if cp_before is not None and cp_after is not None:
+        if side == "black":
+            cp_before_pov = -int(cp_before)
+            cp_after_pov = -int(cp_after)
+        else:
+            cp_before_pov = int(cp_before)
+            cp_after_pov = int(cp_after)
 
-    if is_best and cp_loss <= 8:
+    # Deterministic rule: exact engine move is always Best.
+    if is_best:
         return "best"
-    if cp_loss <= 20:
+
+    # If the move walks into a fresh forced mate, treat it as a blunder.
+    side_mate_before = None
+    side_mate_after = None
+    if mate_before is not None:
+        side_mate_before = int(mate_before) if side != "black" else -int(mate_before)
+    if mate_after is not None:
+        side_mate_after = int(mate_after) if side != "black" else -int(mate_after)
+
+    if side_mate_after is not None and side_mate_after < 0:
+        if side_mate_before is None or side_mate_before >= 0:
+            return "blunder"
+
+    # CAPS2-like core grading buckets.
+    if cp_loss <= 15:
         return "excellent"
-    if cp_loss <= 45:
-        return "great"
-    if cp_loss <= 90:
+    if cp_loss <= 40:
         return "good"
-    if potential_gain >= 180 and cp_loss >= 130:
-        return "miss"
-    if cp_loss <= 170:
+    if cp_loss <= 100:
         return "inaccuracy"
-    if cp_loss <= 280:
+    if cp_loss <= 250:
         return "mistake"
     return "blunder"
 
 
+def win_percent_from_cp(cp: int) -> float:
+    """Convert centipawn eval to win expectancy % for side-to-assess (0..100)."""
+    # Cap extremes so mate scores do not dominate numeric stability.
+    capped = max(-1200, min(1200, int(cp)))
+    w = 2.0 / (1.0 + math.exp(-0.00368208 * capped)) - 1.0
+    return max(0.0, min(100.0, 50.0 + (w * 50.0)))
+
+
+def move_accuracy_from_category(
+    category: str,
+    cp_loss: int,
+    side: str,
+    mate_before: int | None = None,
+    mate_after: int | None = None,
+    severe_streak: int = 0,
+) -> float | None:
+    """CAPS2-style per-move grade: category score with mate and streak smoothing."""
+    base_scores = {
+        "book": 100.0,
+        "best": 100.0,
+        "brilliant": 100.0,
+        "excellent": 90.0,
+        "great": 85.0,
+        "good": 75.0,
+        "inaccuracy": 50.0,
+        "mistake": 20.0,
+        "miss": 20.0,
+        "blunder": 0.0,
+    }
+
+    score = float(base_scores.get(category, 75.0))
+
+    # Fine-tune within each bucket without changing category identity.
+    if category in {"excellent", "great", "good", "inaccuracy", "mistake", "miss", "blunder"}:
+        score -= min(15.0, max(0, cp_loss) / 30.0)
+
+    side_mate_before = None
+    side_mate_after = None
+    if mate_before is not None:
+        side_mate_before = int(mate_before) if side != "black" else -int(mate_before)
+    if mate_after is not None:
+        side_mate_after = int(mate_after) if side != "black" else -int(mate_after)
+
+    # Mate-distance smoothing.
+    if side_mate_after is not None and side_mate_after < 0:
+        if side_mate_before is None or side_mate_before >= 0:
+            # Freshly entering forced mate should score very poorly.
+            score = min(score, 10.0 if abs(side_mate_after) <= 3 else 15.0)
+        else:
+            # Already in a forced-mate sequence: avoid cascading over-penalties.
+            score = max(score, 40.0)
+            # If move extends mate distance, give practical credit.
+            if abs(side_mate_after) > abs(side_mate_before):
+                score = max(score, 78.0)
+
+    # Reduce penalty for consecutive severe mistakes/blunders.
+    if category in {"mistake", "blunder"} and severe_streak > 1:
+        penalty = 100.0 - score
+        penalty *= 0.78 ** (severe_streak - 1)
+        score = 100.0 - penalty
+
+    return round(max(0.0, min(100.0, score)), 1)
+
+
+def accuracy_from_move_accuracies(move_accuracies: list[float]) -> float:
+    if not move_accuracies:
+        return 100.0
+    avg = sum(move_accuracies) / len(move_accuracies)
+    return round(max(0.0, min(100.0, avg)), 1)
+
+
 def accuracy_from_losses(losses: list[int]) -> float:
+    """Legacy fallback formula based on average centipawn loss."""
     if not losses:
         return 100.0
     avg_loss = sum(losses) / len(losses)
