@@ -373,8 +373,9 @@
 
 .review-stage {
     display: grid;
-    grid-template-columns: minmax(0, 2.4fr) minmax(320px, 1fr);
-    gap: 20px;
+    grid-template-columns: minmax(400px, 80vh) minmax(320px, 420px);
+    justify-content: center;
+    gap: 24px;
 }
 
 .board-column {

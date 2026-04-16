@@ -6,7 +6,6 @@ from collections import defaultdict
 
 import chess
 import chess.pgn
-import requests
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
@@ -41,8 +40,7 @@ CATEGORIES = [
 ]
 
 PHASES = ["opening", "middlegame", "endgame"]
-REVIEW_ALGO_VERSION = 8
-OPENING_API_BLOCKED = False
+REVIEW_ALGO_VERSION = 9
 
 
 def _json_body(request):
@@ -162,40 +160,34 @@ def _build_move_explanation(
     
     return f"{move_san} was played."
 
-def _fetch_opening_info(session: requests.Session, fen: str, move_uci: str = None) -> dict:
-    """Fetch opening name and check if move_uci is theoretical via Lichess."""
-    global OPENING_API_BLOCKED
-    if OPENING_API_BLOCKED:
-        return {"name": None, "eco": None, "is_theory": False, "failed": True}
+def _is_book_move_heuristic(
+    ply_index: int,
+    cp_loss: int,
+    move_uci: str,
+    best_move_uci: str,
+    cp_before: int,
+    cp_after: int,
+) -> bool:
+    """Fast local heuristic to detect opening book moves.
+    
+    A move is considered 'book' when:
+    - We are in the first 14 plies (7 full moves)
+    - The centipawn loss is negligible (≤ 5)
+    - The eval stays close to 0 (both before and after are within ±60 cp)
+    - OR the player matched the engine's top move exactly
 
-    try:
-        url = "https://explorer.lichess.ovh/masters"
-        # Always use params so requests correctly urlencodes the FEN
-        resp = session.get(url, params={"fen": fen, "moves": 12}, timeout=3)
-        if resp.status_code == 200:
-            data = resp.json()
-            opening = data.get("opening")
-            
-            is_book = False
-            # If we have a move_uci, check if it exists in the top theoretical moves
-            if move_uci:
-                theory_moves = [m.get("uci") for m in data.get("moves", [])]
-                if move_uci in theory_moves:
-                    is_book = True
-            elif opening:
-                is_book = True
-
-            return {
-                "name": opening.get("name") if opening else None,
-                "eco": opening.get("eco") if opening else None,
-                "is_theory": is_book,
-                "failed": False
-            }
-        if resp.status_code in (401, 403):
-            OPENING_API_BLOCKED = True
-    except Exception:
-        pass
-    return {"name": None, "eco": None, "is_theory": False, "failed": True}
+    This replaces the slow Lichess API which added 16+ seconds of sleep delays.
+    """
+    if ply_index > 14:
+        return False
+    # If you match engine's best move in the first 14 plies, it's book-like
+    if move_uci and best_move_uci and move_uci == best_move_uci and ply_index <= 14:
+        if abs(cp_before) <= 80 and abs(cp_after) <= 80:
+            return True
+    # Very low cp_loss and balanced position = likely theory
+    if cp_loss <= 5 and abs(cp_before) <= 60 and abs(cp_after) <= 60:
+        return True
+    return False
 
 
 def _empty_side_stats():
@@ -264,11 +256,6 @@ def _build_game_review_payload(game_obj, user, priority=0) -> tuple[dict, SavedA
         priority=priority,
     )
 
-    session = requests.Session()
-    # Add a custom User-Agent to avoid Lichess blocking the default python-requests UA
-    session.headers.update({"User-Agent": "ChessCraft-Analysis-Engine/1.0"})
-    in_book = True  # We assume we are in book until a non-theory move is played
-
     for ply_index, move in enumerate(mainline_moves, start=1):
         fen_before = board.fen()
         side = "white" if board.turn else "black"
@@ -315,21 +302,15 @@ def _build_game_review_payload(game_obj, user, priority=0) -> tuple[dict, SavedA
             cp_gain = cp_before - cp_after
             potential_gain = cp_loss
 
-        # Apply Book detection pure API classification
-        if in_book and ply_index <= 20:
-            info = _fetch_opening_info(session, fen_before, move_uci=move_uci)
-            if info.get("failed"):
-                # If API fails, do not assume book. Pure classification.
-                in_book = False
-            else:
-                if info["is_theory"]:
-                    is_book = True
-                    if info["name"]:
-                        opening_name = info["name"]
-                else:
-                    in_book = False
-        else:
-            in_book = False
+        # Fast local book detection (no external API calls)
+        is_book = _is_book_move_heuristic(
+            ply_index=ply_index,
+            cp_loss=cp_loss,
+            move_uci=move_uci,
+            best_move_uci=best_move_uci,
+            cp_before=cp_before,
+            cp_after=cp_after,
+        )
 
         category = classify_move(
             cp_loss=cp_loss,

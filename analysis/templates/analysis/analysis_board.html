@@ -132,33 +132,41 @@
         font-weight: 500;
     }
 
-    /* Engine multi-lines */
-    .ab-lines-container {
+    /* Engine multi-lines above board */
+    .ab-engine-lines {
         display: flex;
         flex-direction: column;
-        gap: 6px;
-        max-height: 200px;
-        overflow-y: auto;
-        padding: 12px;
-        background: rgba(0,0,0,0.02);
-        border-radius: 10px;
-        border: 1px dashed rgba(0,0,0,0.1);
+        gap: 4px;
+        margin-bottom: 8px;
     }
     .ab-engine-line {
         background: var(--bg2);
-        border: 1px solid rgba(0,0,0,0.04);
+        border: 1px solid rgba(0,0,0,0.06);
         border-radius: 8px;
-        padding: 8px 12px;
+        padding: 7px 12px;
         display: flex;
         font-family: var(--font2);
-        font-size: 0.85rem;
-        gap: 12px;
+        font-size: 0.83rem;
+        gap: 10px;
         align-items: center;
+    }
+    .ab-engine-line .line-rank {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: var(--primary);
+        color: #fff;
+        font-size: 0.7rem;
+        font-weight: 800;
+        flex-shrink: 0;
     }
     .ab-engine-line .line-eval {
         font-weight: 700;
         color: var(--primary);
-        width: 45px;
+        min-width: 44px;
         flex-shrink: 0;
     }
     .ab-engine-line .line-pv {
@@ -166,6 +174,7 @@
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+        flex: 1;
     }
 
     /* Eval Bar Score Overlay */
@@ -187,41 +196,6 @@
     }
     .eval-bar-score.top { top: 4px; }
     .eval-bar-score.bottom { bottom: 4px; }
-
-    /* Main Analysis Banner above board */
-    .ab-analysis-banner {
-        background: var(--bg2);
-        border: 1px solid rgba(0,0,0,0.1);
-        border-radius: 10px;
-        padding: 10px 14px;
-        margin-bottom: 14px;
-        font-family: var(--font2);
-        font-size: 0.95rem;
-        min-height: 48px;
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        box-shadow: inset 0 1px 3px rgba(0,0,0,0.05);
-    }
-    .ab-analysis-banner .banner-eval {
-        background: var(--primary);
-        color: white;
-        padding: 4px 10px;
-        border-radius: 6px;
-        font-weight: 800;
-        font-size: 1rem;
-        flex-shrink: 0;
-    }
-    .ab-analysis-banner .banner-pv {
-        color: var(--darktext);
-        font-weight: 500;
-        line-height: 1.4;
-        flex: 1;
-        overflow-x: auto;
-        white-space: nowrap;
-    }
-    .ab-analysis-banner .banner-pv::-webkit-scrollbar { height: 4px; }
-    .ab-analysis-banner .banner-pv::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 2px; }
 
     /* Board nav buttons */
     .ab-nav-row {
@@ -326,11 +300,14 @@
     .ab-btn.secondary { background: var(--btn1); color: var(--lighttext); }
 
     .ab-move-list {
-        max-height: 250px;
+        max-height: 220px;
         overflow-y: auto;
         font-family: var(--font2);
         font-size: 0.85rem;
     }
+    .ab-move-list::-webkit-scrollbar { width: 5px; }
+    .ab-move-list::-webkit-scrollbar-track { background: rgba(0,0,0,0.03); border-radius: 4px; }
+    .ab-move-list::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 4px; }
     .ab-move-cell:hover { background: var(--bg1); }
     .ab-move-cell.active { background: var(--primary); color: var(--lighttext); font-weight: 600; }
 
@@ -371,11 +348,8 @@
         <!-- Board Column -->
         <div class="ab-board-col" id="boardCol">
             
-            <!-- Consolidated Engine Banner at top -->
-            <div id="topAnalysisBanner" class="ab-analysis-banner" style="display:none;">
-                <div class="banner-eval" id="bannerEval">0.0</div>
-                <div class="banner-pv" id="bannerPv">Loading analysis...</div>
-            </div>
+            <!-- Engine Lines (2 lines: top move + second best) -->
+            <div class="ab-engine-lines" id="engineLinesContainer" style="display:none;"></div>
 
             <div class="ab-board-wrap">
                 <div class="ab-eval-bar-wrapper">
@@ -455,7 +429,7 @@
             <!-- Move List -->
             <div class="ab-card" id="moveListCard" style="display:none; flex: 1;">
                 <h3><i class="bi bi-list-ul"></i> Move History</h3>
-                <div class="ab-move-list" id="abMoveList" style="max-height: 400px;"></div>
+                <div class="ab-move-list" id="abMoveList"></div>
             </div>
 
         </div>

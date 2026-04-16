@@ -18,10 +18,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let isSettingUp = window.ANALYSIS_MODE === 'fen';
 
     // ── DOM refs ──
-    const evalRow = document.getElementById('evalRow');
-    const evalScore = document.getElementById('evalScore');
-    const bestMoveText = document.getElementById('bestMoveText');
-    const evalDepth = document.getElementById('evalDepth');
     const moveListCard = document.getElementById('moveListCard');
     const moveList = document.getElementById('abMoveList');
     const statusEl = document.getElementById('abStatus');
@@ -105,8 +101,9 @@ document.addEventListener('DOMContentLoaded', () => {
             renderMoveList();
             analyzePosition(getCurrentLine().fens[currentPly]);
         } else {
-            evalRow.style.display = 'none';
-            document.getElementById('engineLinesContainer').innerHTML = '';
+            // Hide engine UI elements in setup mode
+            const linesContainer = document.getElementById('engineLinesContainer');
+            if (linesContainer) linesContainer.innerHTML = '';
             moveListCard.style.display = 'none';
         }
     }
@@ -180,31 +177,61 @@ document.addEventListener('DOMContentLoaded', () => {
         analyzePosition(getCurrentLine().fens[currentPly]);
     }
 
+    // ── Format a PV line for display ──
+    function formatPvLine(pvSan, startPly) {
+        if (!pvSan || pvSan.length === 0) return '';
+        let out = '';
+        let moveNum = Math.floor(startPly / 2) + 1;
+        let isWhite = (startPly % 2 === 0);
+        for (let i = 0; i < pvSan.length; i++) {
+            if (isWhite) {
+                out += `${moveNum}. ${pvSan[i]} `;
+            } else {
+                if (i === 0) out += `${moveNum}... `;
+                out += `${pvSan[i]} `;
+                moveNum++;
+            }
+            if (isWhite) {
+                // After white move, next is black (same moveNum)
+                isWhite = false;
+            } else {
+                isWhite = true;
+            }
+        }
+        return out.trim();
+    }
+
+    // ── Format eval for display ──
+    function formatEval(cp, mate) {
+        if (mate !== null && mate !== undefined) {
+            return `M${mate}`;
+        }
+        const ev = (cp / 100).toFixed(1);
+        return (cp >= 0 ? '+' : '') + ev;
+    }
+
     // ── Position analysis ──
     async function analyzePosition(fen) {
         if (analyzing) return;
         analyzing = true;
-        evalRow.style.display = 'flex';
         setStatus('loading', 'Analyzing position...');
 
         try {
             const data = await postJson('/analysis/api/analyze/', { fen, multipv: 3 });
-            const cp = data.evaluation_cp || 0;
-            const evalVal = data.evaluation || (cp / 100).toFixed(2);
-            const mate = data.mate;
 
-            let displayEval;
-            if (mate !== null && mate !== undefined) {
-                displayEval = `M${mate}`;
-            } else {
-                displayEval = (evalVal >= 0 ? '+' : '') + evalVal;
-            }
+            const engineLines = data.lines || [];
+            const topLine = engineLines[0] || data;
+            const secondLine = engineLines[1] || null;
+
+            const cp = topLine.evaluation_cp || 0;
+            const mate = topLine.mate;
+            const displayEval = formatEval(cp, mate);
 
             // 1. Update Eval Bar score overlay
             const scoreTop = document.getElementById('evalBarScoreTop');
             const scoreBottom = document.getElementById('evalBarScoreBottom');
             if (scoreTop && scoreBottom) {
-                const isWhiteAdv = (mate !== null) ? mate > 0 : cp > 0;
+                const isWhiteAdv = (mate !== null && mate !== undefined) ? mate > 0 : cp > 0;
                 if (orientation === 'white') {
                     scoreTop.textContent = isWhiteAdv ? '' : displayEval;
                     scoreBottom.textContent = isWhiteAdv ? displayEval : '';
@@ -216,56 +243,47 @@ document.addEventListener('DOMContentLoaded', () => {
 
             updateEvalBar(cp, mate);
 
-            // 2. Update Combined Analysis Banner at top
-            const banner = document.getElementById('topAnalysisBanner');
-            const bannerEval = document.getElementById('bannerEval');
-            const bannerPv = document.getElementById('bannerPv');
+            // 2. Update Engine Lines above the board (2 lines)
+            const linesContainer = document.getElementById('engineLinesContainer');
+            if (linesContainer) {
+                let linesHtml = '';
 
-            if (banner && bannerEval && bannerPv) {
-                bannerEval.textContent = displayEval;
-                
-                if (data.pv_san && data.pv_san.length > 0) {
-                    let formattedLine = '';
-                    let startPly = currentPly;
-                    let moveNum = Math.floor(startPly / 2) + 1;
-                    let isWhiteTurn = (startPly % 2 === 0);
-
-                    // Build formatted PV string: "1: e4 e5, 2: Nf3 Nc6"
-                    let pv = data.pv_san;
-                    let i = 0;
-                    
-                    while (i < pv.length) {
-                        if (isWhiteTurn) {
-                            formattedLine += `${moveNum}: ${pv[i]}`;
-                            if (pv[i+1]) {
-                                formattedLine += ` ${pv[i+1]}`;
-                                i += 2;
-                            } else {
-                                i += 1;
-                            }
-                            moveNum++;
-                        } else {
-                            // If it's black's turn, we show "... black_move"
-                            formattedLine += `${moveNum}: ... ${pv[i]}`;
-                            i += 1;
-                            isWhiteTurn = true; // next move starts with white
-                            moveNum++;
-                        }
-                        if (i < pv.length) formattedLine += ', ';
-                    }
-                    bannerPv.textContent = formattedLine;
-                } else {
-                    bannerPv.textContent = 'No follow-up moves found.';
+                // Line 1: Top engine move
+                if (topLine) {
+                    const topEval = formatEval(topLine.evaluation_cp || 0, topLine.mate);
+                    const topPvSan = topLine.pv_san || [];
+                    const topPvFormatted = formatPvLine(topPvSan, currentPly);
+                    linesHtml += `
+                        <div class="ab-engine-line">
+                            <span class="line-rank">1</span>
+                            <span class="line-eval">${topEval}</span>
+                            <span class="line-pv">${topPvFormatted || '...'}</span>
+                        </div>`;
                 }
-                banner.style.display = 'flex';
+
+                // Line 2: Second best engine move
+                if (secondLine) {
+                    const secEval = formatEval(secondLine.evaluation_cp || 0, secondLine.mate);
+                    const secPvSan = secondLine.pv_san || [];
+                    const secPvFormatted = formatPvLine(secPvSan, currentPly);
+                    linesHtml += `
+                        <div class="ab-engine-line">
+                            <span class="line-rank">2</span>
+                            <span class="line-eval">${secEval}</span>
+                            <span class="line-pv">${secPvFormatted || '...'}</span>
+                        </div>`;
+                }
+
+                linesContainer.innerHTML = linesHtml;
+                linesContainer.style.display = linesHtml ? 'flex' : 'none';
             }
 
             setStatus('success', 'Position analyzed.');
         } catch (err) {
             setStatus('error', 'Analysis failed: ' + err.message);
-            // Clear banner on failure
-            const banner = document.getElementById('topAnalysisBanner');
-            if (banner) banner.style.display = 'none';
+            // Clear engine lines on failure
+            const linesContainer = document.getElementById('engineLinesContainer');
+            if (linesContainer) { linesContainer.innerHTML = ''; linesContainer.style.display = 'none'; }
             // Clear bar overlay scores
             ['evalBarScoreTop', 'evalBarScoreBottom'].forEach(id => {
                 const el = document.getElementById(id);
@@ -340,7 +358,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.key === 'ArrowLeft') goTo(currentPly - 1);
         if (e.key === 'ArrowRight') goTo(currentPly + 1);
         if (e.key === 'Home') goTo(0);
-        if (e.key === 'End') goTo(positions.length - 1);
+        if (e.key === 'End') {
+            const line = getCurrentLine();
+            goTo(line.fens.length - 1);
+        }
     });
 
     // ── Move list rendering ──

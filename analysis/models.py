@@ -4,7 +4,7 @@ from user.models import Game
 
 class SavedAnalysis(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    game = models.ForeignKey(Game, null=True, blank=True, on_delete=models.SET_NULL, related_name='analyses')
+    game = models.ForeignKey(Game, null=True, blank=True, on_delete=models.CASCADE, related_name='analyses')
     game_date = models.DateTimeField(auto_now_add=True)
     pgn_data = models.TextField()
     
