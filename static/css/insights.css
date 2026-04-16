@@ -50,6 +50,14 @@
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
 }
 
+@media (max-width: 480px) {
+    .insights-shell {
+        padding: 20px 12px;
+        margin-top: 10px;
+        border-radius: 12px;
+    }
+}
+
 /* Page header */
 .ins-header {
     text-align: center;
@@ -77,6 +85,19 @@
     font-size: 1.1rem;
     font-weight: 500;
     margin: 0;
+}
+
+@media (max-width: 480px) {
+    .ins-header h1 {
+        font-size: 1.8rem;
+        gap: 8px;
+    }
+    .ins-header p {
+        font-size: 0.9rem;
+    }
+    .ins-header {
+        margin-bottom: 24px;
+    }
 }
 
 /* Player selector */
@@ -182,6 +203,12 @@
     font-size: 1.1rem;
 }
 
+@media (max-width: 480px) {
+    .ins-section-title {
+        font-size: 0.85rem;
+    }
+}
+
 /* Generic card */
 .ins-card {
     background: var(--ins-card);
@@ -251,6 +278,18 @@
     margin-top: 5px;
 }
 
+@media (max-width: 480px) {
+    .stat-card {
+        padding: 12px 8px;
+    }
+    .stat-card .stat-value {
+        font-size: 1.4rem;
+    }
+    .stat-card .stat-label {
+        font-size: 0.65rem;
+    }
+}
+
 .stat-card.highlight .stat-value {
     color: var(--ins-accent2);
 }
@@ -312,6 +351,12 @@
     width: 100%;
 }
 
+@media (max-width: 480px) {
+    .chart-wrap {
+        height: 250px !important; /* Slightly more room for charts on mobile */
+    }
+}
+
 .chart-wrap canvas {
     width: 100% !important;
 }
@@ -341,45 +386,174 @@
     color: #fff;
 }
 
-.openings-table {
+#openingsTableWrap {
     width: 100%;
-    border-collapse: collapse;
-    font-size: 0.88rem;
+    margin-bottom: 10px;
 }
 
-.openings-table th {
-    text-align: left;
-    padding: 8px 10px;
-    color: var(--ins-muted);
-    font-weight: 600;
-    border-bottom: 1px solid var(--ins-border);
-    font-size: 0.78rem;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+/* ── Chess.com-style Breakdown List ── */
+.breakdown-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
 }
 
-.openings-table td {
-    padding: 10px 10px;
-    border-bottom: 1px solid var(--ins-border);
-    vertical-align: middle;
+.bd-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 4px;
+    border-radius: 8px;
+    transition: background 0.15s;
 }
 
-.openings-table tr:last-child td {
-    border-bottom: none;
+.bd-row:hover {
+    background: rgba(0, 0, 0, 0.04);
 }
 
-.openings-table tr:hover td {
-    background: rgba(255, 255, 255, 0.03);
-    cursor: pointer;
+.bd-icon {
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
-.opening-name-cell {
+.bd-icon svg {
+    display: block;
+}
+
+.bd-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.bd-label-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 3px;
+}
+
+.bd-name {
+    font-size: 0.82rem;
     font-weight: 600;
     color: var(--ins-text);
-    max-width: 220px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.bd-count {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--ins-muted);
+}
+
+.bd-pct {
+    font-weight: 400;
+    font-size: 0.72rem;
+    opacity: 0.7;
+}
+
+.bd-bar-track {
+    height: 6px;
+    background: rgba(0, 0, 0, 0.08);
+    border-radius: 3px;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+}
+
+.bd-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.4s ease;
+}
+
+/* ── Opening Cards ── */
+.opening-card {
+    background: var(--ins-surface);
+    border: 1px solid var(--ins-border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.opening-card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.opening-card:last-child {
+    margin-bottom: 0;
+}
+
+.oc-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.oc-rank {
+    background: var(--ins-accent);
+    color: #fff;
+    font-size: 0.72rem;
+    font-weight: 800;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.oc-name {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--ins-text);
+    flex: 1;
+    line-height: 1.3;
+    /* Allow wrapping so full name is visible */
+    word-break: break-word;
+}
+
+.oc-games {
+    font-size: 0.72rem;
+    color: var(--ins-muted);
+    flex-shrink: 0;
+    font-weight: 500;
+}
+
+.oc-bar-row {
+    margin-bottom: 6px;
+}
+
+.oc-bar-track {
+    display: flex;
+    height: 6px;
+    border-radius: 3px;
+    overflow: hidden;
+    background: rgba(0, 0, 0, 0.06);
+}
+
+.oc-bar-w { background: #81b64c; }
+.oc-bar-d { background: #999; }
+.oc-bar-l { background: var(--ins-red); }
+
+.oc-stats {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 0.78rem;
+    font-weight: 600;
+}
+
+.oc-stats .win-rate-cell {
+    margin-left: auto;
+    font-size: 0.85rem;
 }
 
 .win-rate-cell {
@@ -496,6 +670,30 @@
     align-items: center;
     justify-content: space-between;
     width: 100%;
+    gap: 12px;
+}
+
+@media (max-width: 600px) {
+    .controls-row {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 15px;
+    }
+    
+    .sync-group {
+        flex-direction: column;
+        width: 100%;
+    }
+    
+    .sync-btn {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    .server-status {
+        width: 100%;
+        justify-content: center;
+    }
 }
 
 .sync-group {

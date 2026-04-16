@@ -129,11 +129,11 @@
         <!-- Accuracy by Color -->
         <div class="acc-color-row">
             <div class="acc-card">
-                <div class="side-label">♙ As White</div>
+                <div class="side-label">♙ Your Accuracy as White</div>
                 <div class="side-value" id="whiteAcc">--</div>
             </div>
             <div class="acc-card black-side">
-                <div class="side-label">♟ As Black</div>
+                <div class="side-label">♟ Your Accuracy as Black</div>
                 <div class="side-value" id="blackAcc">--</div>
             </div>
         </div>
@@ -154,8 +154,8 @@
                     <div class="radar-scan"></div>
                     <div class="loader-text">Analyzing Move Classification...</div>
                 </div>
-                <div class="chart-wrap content-node" style="height:200px; display:none">
-                    <canvas id="breakdownChart"></canvas>
+                <div class="content-node" style="display:none">
+                    <div id="breakdownList" class="breakdown-list"></div>
                 </div>
                 <div class="empty-state-node" style="display:none">
                     <div class="empty-icon">📊</div>
@@ -186,18 +186,7 @@
                 <button class="color-tab" id="tabBlack">♟ As Black</button>
             </div>
             <div id="openingsTableWrap">
-                <table class="openings-table">
-                    <thead>
-                        <tr>
-                            <th>#</th>
-                            <th>Opening</th>
-                            <th>Games</th>
-                            <th>W</th><th>D</th><th>L</th>
-                            <th>Win %</th>
-                        </tr>
-                    </thead>
-                    <tbody id="openingsBody"></tbody>
-                </table>
+                <div id="openingsContent"></div>
             </div>
         </div>
 

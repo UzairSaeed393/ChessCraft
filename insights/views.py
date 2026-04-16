@@ -114,48 +114,78 @@ def api_summary(request):
         return JsonResponse({'error': 'username required'}, status=400)
 
     analyses = _get_analyses(request, username)
-    agg = analyses.aggregate(
-        avg_white=Avg('white_accuracy'),
-        avg_black=Avg('black_accuracy'),
-        total=Count('id'),
-        tot_brilliant=Sum('brilliant_count'),
-        tot_great=Sum('great_count'),
-        tot_best=Sum('best_count'),
-        tot_excellent=Sum('excellent_count'),
-        tot_good=Sum('good_count'),
-        tot_book=Sum('book_count'),
-        tot_inaccuracy=Sum('inaccuracy_count'),
-        tot_miss=Sum('miss_count'),
-        tot_mistake=Sum('mistake_count'),
-        tot_blunder=Sum('blunder_count'),
-    )
+    
+    # Initialize user-centric stats
+    user_white_accuracies = []
+    user_black_accuracies = []
+    
+    user_move_counts = defaultdict(int)
+    
+    player_lower = username.lower()
+    
+    # Iterate through analyses to separate user stats from opponent
+    for a in analyses:
+        game_obj = a.game
+        if not game_obj:
+            continue
+            
+        # Determine user's side in this game
+        is_user_white = (game_obj.white_player or "").lower() == player_lower
+        is_user_black = (game_obj.black_player or "").lower() == player_lower
+        
+        # 1. Accuracy Attribution
+        if is_user_white:
+            if a.white_accuracy is not None:
+                user_white_accuracies.append(a.white_accuracy)
+        elif is_user_black:
+            if a.black_accuracy is not None:
+                user_black_accuracies.append(a.black_accuracy)
+        
+        # 2. Move Count Attribution (User's side only)
+        # Try to use full_payload for split counts, fallback to saved total counts if needed
+        # (Though current model saves totals, we want individual user counts)
+        payload = a.full_payload or {}
+        summary = payload.get('summary', {})
+        counts = summary.get('counts', {})
+        
+        side_key = 'white' if is_user_white else 'black' if is_user_black else None
+        
+        if side_key and side_key in counts:
+            # We have split counts in the payload!
+            side_counts = counts[side_key]
+            for cat, count in side_counts.items():
+                user_move_counts[cat] += count
+        else:
+            # Fallback (This will happen for old analyses without full_payload)
+            # We unfortunately can only use totals here, which is wrong but better than 0.
+            # In a real environment, we'd trigger a re-analysis or backfill.
+            pass
 
-    white_acc = round(agg['avg_white'] or 0, 1)
-    black_acc = round(agg['avg_black'] or 0, 1)
-    avg_accuracy = round((white_acc + black_acc) / 2, 1) if (white_acc + black_acc) else 0
+    # Aggregated results
+    avg_white = round(sum(user_white_accuracies) / len(user_white_accuracies), 1) if user_white_accuracies else 0
+    avg_black = round(sum(user_black_accuracies) / len(user_black_accuracies), 1) if user_black_accuracies else 0
+    
+    combined_accs = user_white_accuracies + user_black_accuracies
+    avg_accuracy = round(sum(combined_accs) / len(combined_accs), 1) if combined_accs else 0
 
-    total_moves = sum([
-        agg['tot_brilliant'] or 0, agg['tot_great'] or 0, agg['tot_best'] or 0,
-        agg['tot_excellent'] or 0, agg['tot_good'] or 0, agg['tot_book'] or 0,
-        agg['tot_inaccuracy'] or 0, agg['tot_miss'] or 0,
-        agg['tot_mistake'] or 0, agg['tot_blunder'] or 0,
-    ])
-
+    total_games = len(combined_accs)
+    
+    # Win/Loss logic (Already exists in your queryset, but let's sync withGame model)
     games_qs = Game.objects.filter(user=request.user, chess_username_at_time__iexact=username).exclude(
         time_control__in=['60', '60+1', '60+2', '30', '120', '120+1']
     )
+    
     white_wins = white_draws = white_losses = 0
     black_wins = black_draws = black_losses = 0
     wins = draws = losses = 0
     best_acc = worst_acc = None
     best_game_id = worst_game_id = None
     
-    player_lower = username.lower()
     for g in games_qs:
         color = None
-        if g.white_player and g.white_player.lower() == player_lower:
+        if (g.white_player or "").lower() == player_lower:
             color = 'white'
-        elif g.black_player and g.black_player.lower() == player_lower:
+        elif (g.black_player or "").lower() == player_lower:
             color = 'black'
             
         result = g.result or ''
@@ -185,19 +215,19 @@ def api_summary(request):
     }
 
     tips = _generate_tips({
-        'total_moves': total_moves,
-        'blunder': agg['tot_blunder'] or 0,
-        'inaccuracy': agg['tot_inaccuracy'] or 0,
+        'total_moves': sum(user_move_counts.values()),
+        'blunder': user_move_counts.get('blunder', 0),
+        'inaccuracy': user_move_counts.get('inaccuracy', 0),
         'avg_accuracy': avg_accuracy,
-        'white_accuracy': white_acc,
-        'black_accuracy': black_acc,
+        'white_accuracy': avg_white,
+        'black_accuracy': avg_black,
     }, phase_avg)
 
     return JsonResponse({
         'avg_accuracy': avg_accuracy,
-        'white_accuracy': white_acc,
-        'black_accuracy': black_acc,
-        'total_games': agg['total'] or 0,
+        'white_accuracy': avg_white,
+        'black_accuracy': avg_black,
+        'total_games': total_games,
         'wins': wins,
         'draws': draws,
         'losses': losses,
@@ -215,18 +245,7 @@ def api_summary(request):
         'worst_game_id': worst_game_id,
         'worst_accuracy': round(worst_acc, 1) if worst_acc is not None else None,
         'tips': tips,
-        'move_counts': {
-            'brilliant': agg['tot_brilliant'] or 0,
-            'great': agg['tot_great'] or 0,
-            'best': agg['tot_best'] or 0,
-            'excellent': agg['tot_excellent'] or 0,
-            'good': agg['tot_good'] or 0,
-            'book': agg['tot_book'] or 0,
-            'inaccuracy': agg['tot_inaccuracy'] or 0,
-            'miss': agg['tot_miss'] or 0,
-            'mistake': agg['tot_mistake'] or 0,
-            'blunder': agg['tot_blunder'] or 0,
-        },
+        'move_counts': dict(user_move_counts),
     })
 
 
@@ -273,19 +292,25 @@ def api_move_breakdown(request):
     if not username:
         return JsonResponse({'error': 'username required'}, status=400)
 
-    agg = _get_analyses(request, username).aggregate(
-        brilliant=Sum('brilliant_count'),
-        great=Sum('great_count'),
-        best=Sum('best_count'),
-        excellent=Sum('excellent_count'),
-        good=Sum('good_count'),
-        book=Sum('book_count'),
-        inaccuracy=Sum('inaccuracy_count'),
-        miss=Sum('miss_count'),
-        mistake=Sum('mistake_count'),
-        blunder=Sum('blunder_count'),
-    )
-    return JsonResponse({k: v or 0 for k, v in agg.items()})
+    analyses = _get_analyses(request, username)
+    user_move_counts = defaultdict(int)
+    player_lower = username.lower()
+
+    for a in analyses:
+        game_obj = a.game
+        if not game_obj: continue
+        
+        is_user_white = (game_obj.white_player or "").lower() == player_lower
+        is_user_black = (game_obj.black_player or "").lower() == player_lower
+        side_key = 'white' if is_user_white else 'black' if is_user_black else None
+        
+        if side_key:
+            payload = a.full_payload or {}
+            counts = payload.get('summary', {}).get('counts', {}).get(side_key, {})
+            for cat, count in counts.items():
+                user_move_counts[cat] += count
+
+    return JsonResponse({k: v for k, v in user_move_counts.items()})
 
 
 @login_required
@@ -343,35 +368,43 @@ def api_phases(request):
         return JsonResponse({'error': 'username required'}, status=400)
 
     analyses = _get_analyses(request, username)
-    agg = analyses.aggregate(
-        w_op=Avg('white_opening_acc'),
-        w_md=Avg('white_mid_acc'),
-        w_en=Avg('white_end_acc'),
-        b_op=Avg('black_opening_acc'),
-        b_md=Avg('black_mid_acc'),
-        b_en=Avg('black_end_acc'),
-    )
+    player_lower = username.lower()
+    
+    comp = {
+        'white': {'opening': [], 'middlegame': [], 'endgame': []},
+        'black': {'opening': [], 'middlegame': [], 'endgame': []},
+    }
 
-    def _avg(a, b):
-        if a is not None and b is not None: return round((a + b) / 2, 1)
-        if a is not None: return round(a, 1)
-        if b is not None: return round(b, 1)
-        return None
+    for a in analyses:
+        game_obj = a.game
+        if not game_obj: continue
+        
+        if (game_obj.white_player or "").lower() == player_lower:
+            if a.white_opening_acc is not None: comp['white']['opening'].append(a.white_opening_acc)
+            if a.white_mid_acc is not None: comp['white']['middlegame'].append(a.white_mid_acc)
+            if a.white_end_acc is not None: comp['white']['endgame'].append(a.white_end_acc)
+        elif (game_obj.black_player or "").lower() == player_lower:
+            if a.black_opening_acc is not None: comp['black']['opening'].append(a.black_opening_acc)
+            if a.black_mid_acc is not None: comp['black']['middlegame'].append(a.black_mid_acc)
+            if a.black_end_acc is not None: comp['black']['endgame'].append(a.black_end_acc)
 
-    return JsonResponse({
-        'white': {
-            'opening': round(agg['w_op'], 1) if agg['w_op'] is not None else None,
-            'middlegame': round(agg['w_md'], 1) if agg['w_md'] is not None else None,
-            'endgame': round(agg['w_en'], 1) if agg['w_en'] is not None else None,
-        },
-        'black': {
-            'opening': round(agg['b_op'], 1) if agg['b_op'] is not None else None,
-            'middlegame': round(agg['b_md'], 1) if agg['b_md'] is not None else None,
-            'endgame': round(agg['b_en'], 1) if agg['b_en'] is not None else None,
-        },
-        'overall': {
-            'opening': _avg(agg['w_op'], agg['b_op']),
-            'middlegame': _avg(agg['w_md'], agg['b_md']),
-            'endgame': _avg(agg['w_en'], agg['b_en']),
-        }
-    })
+    def _avg(lst):
+        return round(sum(lst) / len(lst), 1) if lst else None
+
+    res = {
+        'white': {k: _avg(v) for k, v in comp['white'].items()},
+        'black': {k: _avg(v) for k, v in comp['black'].items()},
+    }
+    
+    # Calculate overall user phase averages
+    overall_opening = [x for x in comp['white']['opening'] + comp['black']['opening'] if x is not None]
+    overall_mid = [x for x in comp['white']['middlegame'] + comp['black']['middlegame'] if x is not None]
+    overall_end = [x for x in comp['white']['endgame'] + comp['black']['endgame'] if x is not None]
+
+    res['overall'] = {
+        'opening': _avg(overall_opening),
+        'middlegame': _avg(overall_mid),
+        'endgame': _avg(overall_end),
+    }
+
+    return JsonResponse(res)

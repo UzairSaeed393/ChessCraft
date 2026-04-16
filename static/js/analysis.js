@@ -10,10 +10,14 @@
     }
 
     const categoryOrder = [
+        'brilliant',
+        'great',
         'best',
         'excellent',
+        'good',
         'book',
         'inaccuracy',
+        'miss',
         'mistake',
         'blunder',
     ];

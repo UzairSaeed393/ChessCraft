@@ -41,7 +41,7 @@ CATEGORIES = [
 ]
 
 PHASES = ["opening", "middlegame", "endgame"]
-REVIEW_ALGO_VERSION = 5
+REVIEW_ALGO_VERSION = 7
 OPENING_API_BLOCKED = False
 
 
@@ -53,17 +53,51 @@ def _json_body(request):
 
 
 def _phase_for_position(board: chess.Board, ply_index: int) -> str:
-    if ply_index <= 16:
-        return "opening"
-
-    white_queens = len(board.pieces(chess.QUEEN, chess.WHITE))
-    black_queens = len(board.pieces(chess.QUEEN, chess.BLACK))
-    non_king_pieces = sum(
-        1 for piece in board.piece_map().values() if piece.piece_type != chess.KING
-    )
-    if (white_queens + black_queens == 0) or non_king_pieces <= 10:
+    """Determine game phase from material on the board (pure calculation).
+    
+    Material values: P=1, N=3, B=3, R=5, Q=9
+    Total starting material (excluding kings) = 78 (39 per side)
+    
+    Opening:  Total material >= 62 (less than ~2 minor pieces traded)
+    Endgame:  No queens on either side, OR total material <= 24
+    Middlegame: Everything else
+    """
+    piece_values = {
+        chess.PAWN: 1,
+        chess.KNIGHT: 3,
+        chess.BISHOP: 3,
+        chess.ROOK: 5,
+        chess.QUEEN: 9,
+    }
+    
+    white_material = 0
+    black_material = 0
+    white_queens = 0
+    black_queens = 0
+    
+    for piece_type, value in piece_values.items():
+        white_count = len(board.pieces(piece_type, chess.WHITE))
+        black_count = len(board.pieces(piece_type, chess.BLACK))
+        white_material += white_count * value
+        black_material += black_count * value
+        if piece_type == chess.QUEEN:
+            white_queens = white_count
+            black_queens = black_count
+    
+    total_material = white_material + black_material
+    
+    # Endgame: both sides have no queen, or very low material
+    if total_material <= 24:
         return "endgame"
+    if white_queens == 0 and black_queens == 0 and total_material <= 32:
+        return "endgame"
+    
+    # Opening: most material still on the board (less than ~2 minor pieces traded)
+    if total_material >= 62:
+        return "opening"
+    
     return "middlegame"
+
 
 
 def _to_san_line(start_fen: str, uci_line: list[str], max_moves: int = 6) -> list[str]:
@@ -340,6 +374,8 @@ def _build_game_review_payload(game_obj, user, priority=0) -> tuple[dict, SavedA
             mate_before=mate_before,
             mate_after=mate_after,
             severe_streak=side_stats[side]["severe_streak"],
+            cp_before=cp_before,
+            cp_after=cp_after,
         )
 
         best_san = "(none)"
@@ -662,37 +698,56 @@ def analyze_single_position(request):
         if not fen:
             return JsonResponse({"error": "fen is required"}, status=400)
 
+        # 1. Server-side FEN validation
+        try:
+            board = chess.Board(fen)
+            # board.status() checks for typical illegalities (king counts, etc.)
+            status = board.status()
+            if status != chess.STATUS_VALID:
+                if status & (chess.STATUS_NO_WHITE_KING | chess.STATUS_NO_BLACK_KING):
+                    return JsonResponse({"error": "Invalid position: Both players must have a King."}, status=400)
+                if status & chess.STATUS_OPPOSITE_CHECK:
+                    return JsonResponse({"error": "Invalid position: Opponent King is in check (impossible state)."}, status=400)
+                # Generic fallback for other status errors
+                return JsonResponse({"error": "Invalid board position."}, status=400)
+        except (ValueError, IndexError):
+            return JsonResponse({"error": "Invalid FEN string. Please check the format."}, status=400)
+
         depth = body.get("depth")
         multipv = min(int(body.get("multipv") or 1), 3)  # max 3 lines
 
         manager = StockfishManager()
 
-        if multipv > 1:
-            # Multi-PV: get all lines from local engine
-            results = manager.get_analysis_multipv(fen, depth=depth, multipv=multipv, priority=0)
-            lines = []
-            for r in results:
-                pv_san = _to_san_line(fen, r.get("pv") or [], max_moves=8)
-                lines.append({
-                    "evaluation_cp": r.get("evaluation_cp", 0),
-                    "evaluation": r.get("evaluation", 0),
-                    "best_move": r.get("best_move", ""),
-                    "pv": r.get("pv", []),
-                    "pv_san": pv_san,
-                    "depth": r.get("depth"),
-                    "mate": r.get("mate"),
-                })
-            # Return first line as top-level for backward compatibility
-            top = lines[0] if lines else {}
-            return JsonResponse({"status": "success", **top, "lines": lines})
-        else:
-            result = manager.get_analysis(fen, depth=depth, multipv=1, priority=0)
-            pv_san = _to_san_line(fen, result.get("pv") or [], max_moves=8)
-            return JsonResponse({"status": "success", **result, "pv_san": pv_san, "lines": [{**result, "pv_san": pv_san}]})
-    except Exception as e:
-        import traceback
-        trace=traceback.format_exc()
-        return JsonResponse({"error": trace}, status=500)
+        try:
+            if multipv > 1:
+                # Multi-PV: get all lines from local engine
+                results = manager.get_analysis_multipv(fen, depth=depth, multipv=multipv, priority=0)
+                lines = []
+                for r in results:
+                    pv_san = _to_san_line(fen, r.get("pv") or [], max_moves=8)
+                    lines.append({
+                        "evaluation_cp": r.get("evaluation_cp", 0),
+                        "evaluation": r.get("evaluation", 0),
+                        "best_move": r.get("best_move", ""),
+                        "pv": r.get("pv", []),
+                        "pv_san": pv_san,
+                        "depth": r.get("depth"),
+                        "mate": r.get("mate"),
+                    })
+                # Return first line as top-level for backward compatibility
+                top = lines[0] if lines else {}
+                return JsonResponse({"status": "success", **top, "lines": lines})
+            else:
+                result = manager.get_analysis(fen, depth=depth, multipv=1, priority=0)
+                pv_san = _to_san_line(fen, result.get("pv") or [], max_moves=8)
+                # Maintain exact same JSON structure as original success
+                return JsonResponse({"status": "success", **result, "pv_san": pv_san, "lines": [{**result, "pv_san": pv_san}]})
+        except Exception as engine_err:
+            # Catch engine-specific errors (timeouts, remote failures) and return as clean JSON
+            return JsonResponse({"error": f"Analysis engine error: {str(engine_err)}"}, status=502)
+
+    except Exception:
+        return JsonResponse({"error": "An internal error occurred during analysis."}, status=500)
 
 
 @login_required

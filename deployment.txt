@@ -1,0 +1,147 @@
+# ChessCraft Deployment Guide
+
+This guide covers the necessary steps to deploy the ChessCraft Django application to a cloud server (such as an Azure VM, Render, DigitalOcean droplet, or any Debian/Ubuntu server).
+
+## 1. Setting up the Production Environment
+
+In local development, you use `python manage.py runserver`. In production, this is insecure and slow. Instead, we use **Gunicorn** to serve the python app, and we use **WhiteNoise** to serve the static files (like your CSS and JavaScript).
+
+First, SSH into your server, clone your repository, and create a virtual environment:
+
+```bash
+# Clone the repo (you should be pulling the 'main' branch)
+git clone https://github.com/UzairSaeed393/ChessCraft.git
+cd ChessCraft
+
+# Create and activate virtual environment
+python3 -m venv venv
+source venv/bin/activate
+
+# Install requirements
+pip install -r requirements.txt
+```
+
+## 2. Server Configuration (.env file)
+
+In production, you **MUST NOT** have `DEBUG=True`.
+Create a `.env` file in the same directory as your `manage.py` file with your production keys:
+
+```
+# Essential standard Django configs
+SECRET_KEY=your_super_secret_production_key_here
+DEBUG=False
+ALLOWED_HOSTS=chesscraft.me,www.chesscraft.me,20.189.112.196,localhost
+
+# Database details (Use Postgres in production!)
+DB_ENGINE=postgres
+DB_NAME=chesscraft_db
+DB_USER=chesscraft_user
+DB_PASSWORD=your_secure_password
+DB_HOST=localhost
+DB_PORT=5432
+
+# Other configs
+SITE_URL=https://chesscraft.me
+ANALYSIS_ENGINE_MODE=local
+```
+
+## 3. Database and Static Files
+
+Run your migrations and collect all CSS/JS files into one root folder so WhiteNoise can serve them safely:
+
+```bash
+python manage.py migrate
+
+# This command moves all static files to staticfile/ directory
+python manage.py collectstatic --noinput
+```
+
+## 4. Running the App with Gunicorn
+
+Test run your app with Gunicorn to make sure it works.
+```bash
+gunicorn ChessCraft.wsgi:application --bind 0.0.0.0:8000 --workers 3
+```
+If you visit `http://your-server-ip:8000`, you should see the site! Note: `ALLOWED_HOSTS` in `.env` must include this IP or domain!
+
+## 5. Process Management (Running Forever)
+
+You don't want the server to die when you close the terminal. We will use `systemd` (Linux service manager).
+
+Create a file: `/etc/systemd/system/chesscraft.service`
+```ini
+[Unit]
+Description=gunicorn daemon for ChessCraft
+After=network.target
+
+[Service]
+User=your_linux_username
+Group=www-data
+WorkingDirectory=/path/to/ChessCraft
+Environment="PATH=/path/to/ChessCraft/venv/bin"
+ExecStart=/path/to/ChessCraft/venv/bin/gunicorn --access-logfile - --workers 3 --bind unix:/path/to/ChessCraft/chesscraft.sock ChessCraft.wsgi:application
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Start the service:
+```bash
+sudo systemctl start chesscraft
+sudo systemctl enable chesscraft
+```
+
+## 6. Configuring Nginx (Reverse Proxy)
+
+Gunicorn is running on your server, but users will connect via ports 80 (HTTP) and 443 (HTTPS). You use **Nginx** for this.
+
+Install Nginx: `sudo apt install nginx`
+
+Create a file at `/etc/nginx/sites-available/chesscraft`:
+```nginx
+server {
+    listen 80;
+    server_name chesscraft.me www.chesscraft.me 20.189.112.196;
+
+    location = /favicon.ico { access_log off; log_not_found off; }
+    
+    # Static files are handled internally by WhiteNoise now, but you could point Nginx here too for extra speed
+    # location /static/ {
+    #     root /path/to/ChessCraft;
+    # }
+
+    location / {
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_pass http://unix:/path/to/ChessCraft/chesscraft.sock;
+    }
+}
+```
+
+Enable the Nginx config:
+```bash
+sudo ln -s /etc/nginx/sites-available/chesscraft /etc/nginx/sites-enabled
+sudo nginx -t
+sudo systemctl restart nginx
+```
+
+## 7. Security (SSL/HTTPS)
+
+You should encrypt data. Use Certbot to grab a free SSL cert for your domain.
+
+```bash
+sudo apt install python3-certbot-nginx
+sudo certbot --nginx -d chesscraft.me -d www.chesscraft.me
+```
+
+## 8. Development Updates Flow
+
+When updating your app with new features:
+1. Develop on your `next-update` branch on your local machine.
+2. Once testing is complete, merge `next-update` into `main`.
+3. Push to GitHub (`git push origin main`).
+4. On your production server, pull the branch (`git pull origin main`).
+5. Run migrations/collectstatic if necessary.
+6. Restart Gunicorn: `sudo systemctl restart chesscraft.service`

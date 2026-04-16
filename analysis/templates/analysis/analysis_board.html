@@ -42,6 +42,7 @@
     .ab-header .back-link:hover { opacity: 0.7; }
 
     /* ── Layout: Board + Sidebar ── */
+    /* ── Layout: Board + Sidebar ── */
     .ab-layout {
         display: flex;
         gap: 24px;
@@ -50,8 +51,10 @@
 
     .ab-board-col {
         flex-shrink: 0;
-        width: 420px;
-        position: relative;
+        width: 380px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
     }
     .ab-board-wrap {
         background: #2a2927;
@@ -74,29 +77,36 @@
         bottom: 0;
         left: 0;
         width: 100%;
-        background-color: #fff; /* white's advantage is white fill from bottom */
+        background-color: #fff;
         transition: height 0.3s ease;
-        height: 50%; /* starts at 0.0 */
+        height: 50%;
     }
-    /* invert fill color if orientation is black */
-    .ab-board-col.flipped .ab-eval-bar-fill {
-        background-color: #333; /* black's advantage is dark fill when flipped? Wait, if flipped, bottom is black. It's easier to just manage height/color via JS */
-    }
-
+    
     #analysisBoard { flex: 1; height: auto; }
     .white-1e1d7 { background-color: #f0d9b5 !important; color: #b58863; }
     .black-3c85d { background-color: #b58863 !important; color: #f0d9b5; }
 
+    /* New: Shared Controls Group below board */
+    .ab-controls-group {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+    .ab-action-row {
+        display: flex;
+        gap: 8px;
+    }
+    .ab-action-row .ab-btn { flex: 1; justify-content: center; }
 
-    /* Eval bar */
+    /* Eval bar inside sidebar */
     .ab-eval-row {
         display: flex;
         align-items: center;
         gap: 12px;
-        margin-top: 10px;
-        padding: 8px 12px;
+        padding: 10px 14px;
         background: var(--bg2);
-        border-radius: 8px;
+        border: 1px solid rgba(0,0,0,0.06);
+        border-radius: 10px;
         font-family: var(--font2);
     }
     .ab-eval-row .eval-label {
@@ -124,16 +134,19 @@
 
     /* Engine multi-lines */
     .ab-lines-container {
-        margin-top: 12px;
         display: flex;
         flex-direction: column;
         gap: 6px;
-        max-height: 170px;
+        max-height: 200px;
         overflow-y: auto;
+        padding: 12px;
+        background: rgba(0,0,0,0.02);
+        border-radius: 10px;
+        border: 1px dashed rgba(0,0,0,0.1);
     }
     .ab-engine-line {
         background: var(--bg2);
-        border: 1px solid rgba(0,0,0,0.06);
+        border: 1px solid rgba(0,0,0,0.04);
         border-radius: 8px;
         padding: 8px 12px;
         display: flex;
@@ -155,32 +168,94 @@
         text-overflow: ellipsis;
     }
 
+    /* Eval Bar Score Overlay */
+    .ab-eval-bar-wrapper {
+        position: relative;
+    }
+    .eval-bar-score {
+        position: absolute;
+        width: 100%;
+        left: 0;
+        text-align: center;
+        font-size: 10px;
+        font-weight: 700;
+        z-index: 5;
+        pointer-events: none;
+        color: var(--primary);
+        mix-blend-mode: difference;
+        filter: invert(1);
+    }
+    .eval-bar-score.top { top: 4px; }
+    .eval-bar-score.bottom { bottom: 4px; }
+
+    /* Main Analysis Banner above board */
+    .ab-analysis-banner {
+        background: var(--bg2);
+        border: 1px solid rgba(0,0,0,0.1);
+        border-radius: 10px;
+        padding: 10px 14px;
+        margin-bottom: 14px;
+        font-family: var(--font2);
+        font-size: 0.95rem;
+        min-height: 48px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        box-shadow: inset 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .ab-analysis-banner .banner-eval {
+        background: var(--primary);
+        color: white;
+        padding: 4px 10px;
+        border-radius: 6px;
+        font-weight: 800;
+        font-size: 1rem;
+        flex-shrink: 0;
+    }
+    .ab-analysis-banner .banner-pv {
+        color: var(--darktext);
+        font-weight: 500;
+        line-height: 1.4;
+        flex: 1;
+        overflow-x: auto;
+        white-space: nowrap;
+    }
+    .ab-analysis-banner .banner-pv::-webkit-scrollbar { height: 4px; }
+    .ab-analysis-banner .banner-pv::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 2px; }
+
     /* Board nav buttons */
     .ab-nav-row {
         display: flex;
-        gap: 8px;
-        margin-top: 10px;
+        gap: 6px;
     }
     .ab-nav-btn {
         flex: 1;
-        padding: 10px;
+        padding: 12px;
         background: var(--bg2);
-        border: 1px solid rgba(0,0,0,0.06);
+        border: 1px solid rgba(0,0,0,0.08);
         border-radius: 8px;
-        font-size: 1.1rem;
+        font-size: 1.2rem;
         color: var(--primary);
         cursor: pointer;
-        transition: background 0.15s, transform 0.1s;
+        transition: all 0.2s;
         display: flex;
         align-items: center;
         justify-content: center;
     }
-    .ab-nav-btn:hover { background: var(--bg1); transform: translateY(-1px); }
+    .ab-nav-btn:hover { background: var(--primary); color: white; border-color: transparent; }
+    .ab-flip-btn {
+        background: var(--bg2); border: 1px solid rgba(0,0,0,0.08); color: var(--primary);
+        font-size: 1.2rem; cursor: pointer; padding: 4px 12px;
+        border-radius: 8px;
+        transition: all 0.2s;
+    }
+    .ab-flip-btn:hover { background: var(--btn1); color: white; transform: rotate(180deg); }
 
     /* ── Sidebar ── */
     .ab-sidebar {
         flex: 1;
         min-width: 0;
+        max-width: 500px;
         display: flex;
         flex-direction: column;
         gap: 16px;
@@ -190,34 +265,34 @@
         background: var(--bg2);
         border: 1px solid rgba(0,0,0,0.06);
         border-radius: 14px;
-        padding: 20px;
+        padding: 16px;
     }
     .ab-card h3 {
-        font-size: 0.85rem;
+        font-size: 0.8rem;
         font-weight: 700;
         color: var(--primary);
         text-transform: uppercase;
-        letter-spacing: 0.5px;
+        letter-spacing: 0.6px;
         margin: 0 0 12px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
     }
 
     /* PGN textarea */
     .ab-textarea {
         width: 100%;
-        min-height: 160px;
+        min-height: 120px;
         background: var(--mainbg);
         border: 1px solid rgba(0,0,0,0.1);
         border-radius: 8px;
-        padding: 12px;
+        padding: 10px;
         font-family: 'Courier New', monospace;
         font-size: 0.85rem;
         color: var(--darktext);
         resize: vertical;
     }
-    .ab-textarea:focus {
-        outline: 2px solid var(--primary);
-        border-color: transparent;
-    }
+    .ab-textarea:focus { outline: 2px solid var(--primary); border-color: transparent; }
 
     /* FEN input */
     .ab-input {
@@ -225,119 +300,46 @@
         background: var(--mainbg);
         border: 1px solid rgba(0,0,0,0.1);
         border-radius: 8px;
-        padding: 10px 12px;
+        padding: 10px;
         font-family: 'Courier New', monospace;
         font-size: 0.85rem;
         color: var(--darktext);
     }
-    .ab-input:focus {
-        outline: 2px solid var(--primary);
-        border-color: transparent;
-    }
+    .ab-input:focus { outline: 2px solid var(--primary); border-color: transparent; }
 
-    /* Action buttons */
     .ab-btn {
         display: inline-flex;
         align-items: center;
         gap: 6px;
-        padding: 10px 20px;
+        padding: 10px 16px;
         border-radius: 8px;
         border: none;
-        font-size: 0.9rem;
+        font-size: 0.85rem;
         font-weight: 700;
         cursor: pointer;
-        transition: transform 0.15s, box-shadow 0.15s;
+        transition: transform 0.1s, opacity 0.2s;
         font-family: var(--font1);
     }
-    .ab-btn:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+    .ab-btn:active { transform: scale(0.98); }
     .ab-btn.primary { background: var(--primary); color: var(--lighttext); }
-    .ab-btn.secondary { background: var(--btn1); color: var(--lighttext); }
     .ab-btn.outline { background: transparent; border: 2px solid var(--primary); color: var(--primary); }
-    .ab-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+    .ab-btn.secondary { background: var(--btn1); color: var(--lighttext); }
 
-    /* Move list */
     .ab-move-list {
-        max-height: 300px;
+        max-height: 250px;
         overflow-y: auto;
         font-family: var(--font2);
         font-size: 0.85rem;
-        padding-right: 6px;
-    }
-    .ab-move-list::-webkit-scrollbar { width: 6px; }
-    .ab-move-list::-webkit-scrollbar-track { background: rgba(0,0,0,0.05); border-radius: 4px; }
-    .ab-move-list::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 4px; }
-    .ab-move-list::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.25); }
-    .ab-line-title {
-        margin: 10px 0 6px;
-        font-size: 0.75rem;
-        font-weight: 700;
-        color: #888;
-        text-transform: uppercase;
-        letter-spacing: 0.4px;
-    }
-    .ab-line-block.variation {
-        margin-left: 14px;
-        padding-left: 10px;
-        border-left: 2px solid rgba(0,0,0,0.06);
-    }
-    .ab-move-row {
-        display: flex;
-        gap: 4px;
-        padding: 3px 0;
-    }
-    .ab-move-num {
-        width: 30px;
-        color: #888;
-        font-weight: 600;
-        flex-shrink: 0;
-    }
-    .ab-move-cell {
-        flex: 1;
-        padding: 3px 8px;
-        border-radius: 4px;
-        cursor: pointer;
-        transition: background 0.15s;
-        color: var(--darktext);
     }
     .ab-move-cell:hover { background: var(--bg1); }
     .ab-move-cell.active { background: var(--primary); color: var(--lighttext); font-weight: 600; }
 
-    /* Status messages */
-    .ab-status {
-        padding: 12px 16px;
-        border-radius: 8px;
-        font-size: 0.9rem;
-        font-family: var(--font2);
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
-    .ab-status.info { background: var(--bg1); color: var(--darktext); }
-    .ab-status.success { background: #d4edda; color: #155724; }
-    .ab-status.error { background: #f8d7da; color: #721c24; }
-    .ab-status.loading { background: var(--bg2); color: var(--darktext); }
-    .ab-status .spinner {
-        width: 16px; height: 16px;
-        border: 2px solid rgba(0,0,0,0.1);
-        border-top-color: var(--primary);
-        border-radius: 50%;
-        animation: abspin 0.6s linear infinite;
-    }
-    @keyframes abspin { to { transform: rotate(360deg); } }
-
-    /* Flip board button */
-    .ab-flip-btn {
-        background: none; border: none; color: var(--primary);
-        font-size: 1.2rem; cursor: pointer; padding: 4px;
-        transition: transform 0.3s;
-    }
-    .ab-flip-btn:hover { transform: rotate(180deg); }
-
-    /* Responsive */
-    @media (max-width: 850px) {
-        .ab-layout { flex-direction: column; }
-        .ab-board-col { width: 100%; max-width: 420px; margin: 0 auto; }
-        .ab-sidebar { width: 100%; }
+    /* Responsive Stack */
+    @media (max-width: 950px) {
+        .ab-layout { flex-direction: column; align-items: center; }
+        .ab-board-col { width: 100%; max-width: 450px; order: 1; }
+        .ab-sidebar { width: 100%; max-width: 450px; order: 2; }
+        .ab-controls-group { order: 3; width: 100%; margin-top: 10px; }
     }
 
     /* Mode tweaks: keep PGN board smaller so moves/buttons stay in view */
@@ -368,63 +370,74 @@
 
         <!-- Board Column -->
         <div class="ab-board-col" id="boardCol">
+            
+            <!-- Consolidated Engine Banner at top -->
+            <div id="topAnalysisBanner" class="ab-analysis-banner" style="display:none;">
+                <div class="banner-eval" id="bannerEval">0.0</div>
+                <div class="banner-pv" id="bannerPv">Loading analysis...</div>
+            </div>
+
             <div class="ab-board-wrap">
                 <div class="ab-eval-bar-wrapper">
                     <div class="ab-eval-bar-fill" id="evalBarFill"></div>
+                    <!-- Eval Score Overlay -->
+                    <span id="evalBarScoreTop" class="eval-bar-score top"></span>
+                    <span id="evalBarScoreBottom" class="eval-bar-score bottom"></span>
                 </div>
                 <div id="analysisBoard"></div>
             </div>
 
-            <div class="ab-eval-row" id="evalRow" style="display:none;">
-                <span class="eval-label">Eval</span>
-                <span class="eval-score" id="evalScore">0.0</span>
-                <span class="best-move-text" id="bestMoveText"></span>
-                <span class="eval-depth" id="evalDepth"></span>
-            </div>
+            <!-- Grouped Controls -->
+            <div class="ab-controls-group">
+                <!-- Navigation -->
+                <div class="ab-nav-row">
+                    <button class="ab-nav-btn" id="abBtnStart" title="Start"><i class="bi bi-chevron-bar-left"></i></button>
+                    <button class="ab-nav-btn" id="abBtnPrev" title="Previous"><i class="bi bi-chevron-left"></i></button>
+                    <button class="ab-nav-btn" id="abBtnNext" title="Next"><i class="bi bi-chevron-right"></i></button>
+                    <button class="ab-nav-btn" id="abBtnEnd" title="End"><i class="bi bi-chevron-bar-right"></i></button>
+                    <button class="ab-flip-btn" id="abBtnFlip" title="Flip Board"><i class="bi bi-arrow-repeat"></i></button>
+                </div>
 
-            <div class="ab-lines-container" id="engineLinesContainer">
-                <!-- Lines injected here -->
+                <!-- Mode Actions (Loaded dynamically via mode tag) -->
+                <div class="ab-action-row">
+                    {% if mode == 'pgn' %}
+                        <button class="ab-btn primary" id="btnLoadPgn"><i class="bi bi-play-fill"></i> Load & Analyze</button>
+                        <button class="ab-btn outline" id="btnClearPgn"><i class="bi bi-trash"></i> Clear</button>
+                    {% elif mode == 'fen' %}
+                        <button class="ab-btn primary" id="btnLoadFen"><i class="bi bi-play-fill"></i> Load & Analyze</button>
+                        <button class="ab-btn outline" id="btnResetFen"><i class="bi bi-arrow-counterclockwise"></i> Reset</button>
+                    {% elif mode == 'new' %}
+                        <button class="ab-btn secondary" id="btnResetBoard" style="width: 100%;"><i class="bi bi-arrow-counterclockwise"></i> Reset Board</button>
+                    {% endif %}
+                </div>
             </div>
-
         </div>
 
         <!-- Sidebar -->
         <div class="ab-sidebar">
 
             {% if mode == 'pgn' %}
-            <!-- Paste PGN Mode -->
             <div class="ab-card" id="pgnInputCard">
-                <h3><i class="bi bi-clipboard-data me-1"></i> Paste Your PGN</h3>
+                <h3><i class="bi bi-clipboard-data"></i> PGN Input</h3>
                 <textarea class="ab-textarea" id="pgnInput" placeholder="Paste your PGN here...&#10;&#10;e.g.&#10;1. e4 e5 2. Nf3 Nc6 3. Bb5 a6..."></textarea>
-                <div style="margin-top: 12px; display:flex; gap: 8px;">
-                    <button class="ab-btn primary" id="btnLoadPgn"><i class="bi bi-play-fill"></i> Load & Analyze</button>
-                    <button class="ab-btn outline" id="btnClearPgn"><i class="bi bi-trash"></i> Clear</button>
-                </div>
             </div>
             {% endif %}
 
             {% if mode == 'fen' %}
-            <!-- Setup Position Mode -->
             <div class="ab-card" id="fenInputCard">
-                <h3><i class="bi bi-grid-3x3-gap me-1"></i> FEN Position</h3>
+                <h3><i class="bi bi-grid-3x3-gap"></i> FEN Input</h3>
                 <input class="ab-input" id="fenInput" type="text"
                        value="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
                        placeholder="Paste FEN string here...">
-                <div style="margin-top: 12px; display: flex; gap: 8px;">
-                    <button class="ab-btn primary" id="btnLoadFen"><i class="bi bi-play-fill"></i> Load & Analyze</button>
-                    <button class="ab-btn outline" id="btnResetFen"><i class="bi bi-arrow-counterclockwise"></i> Reset</button>
-                </div>
             </div>
             {% endif %}
 
             {% if mode == 'new' %}
-            <!-- New Game Mode -->
             <div class="ab-card">
-                <h3><i class="bi bi-plus-circle me-1"></i> Explore Freely</h3>
-                <p style="font-size: 0.9rem; color: var(--darktext); margin: 0 0 12px; font-family: var(--font2); line-height: 1.5;">
-                    Make moves on the board to explore openings and positions. Each move is analyzed in real-time by the engine.
+                <h3><i class="bi bi-plus-circle"></i> Instructions</h3>
+                <p style="font-size: 0.85rem; color: #555; margin: 0; font-family: var(--font2);">
+                    Make moves on the board to explore openings. Each move is analyzed in real-time.
                 </p>
-                <button class="ab-btn secondary" id="btnResetBoard"><i class="bi bi-arrow-counterclockwise"></i> Reset Board</button>
             </div>
             {% endif %}
 
@@ -432,25 +445,17 @@
             <div class="ab-status info" id="abStatus">
                 <i class="bi bi-info-circle"></i>
                 <span id="abStatusText">
-                    {% if mode == 'pgn' %}Paste a PGN above and click "Load & Analyze".
-                    {% elif mode == 'fen' %}Enter a FEN string above or use the default starting position.
-                    {% else %}Make a move on the board to begin analysis.
+                    {% if mode == 'pgn' %}Paste a PGN to begin.
+                    {% elif mode == 'fen' %}Setup a position then click Load.
+                    {% else %}Make a move to begin analysis.
                     {% endif %}
                 </span>
             </div>
 
             <!-- Move List -->
-            <div class="ab-card" id="moveListCard" style="display:none;">
-                <h3>Moves</h3>
-                <div class="ab-move-list" id="abMoveList"></div>
-                
-                <div class="ab-nav-row" style="margin-top: 16px;">
-                    <button class="ab-nav-btn" id="abBtnStart" title="Start"><i class="bi bi-chevron-bar-left"></i></button>
-                    <button class="ab-nav-btn" id="abBtnPrev" title="Previous"><i class="bi bi-chevron-left"></i></button>
-                    <button class="ab-nav-btn" id="abBtnNext" title="Next"><i class="bi bi-chevron-right"></i></button>
-                    <button class="ab-nav-btn" id="abBtnEnd" title="End"><i class="bi bi-chevron-bar-right"></i></button>
-                    <button class="ab-flip-btn" id="abBtnFlip" title="Flip Board" style="margin-left:8px;"><i class="bi bi-arrow-repeat"></i></button>
-                </div>
+            <div class="ab-card" id="moveListCard" style="display:none; flex: 1;">
+                <h3><i class="bi bi-list-ul"></i> Move History</h3>
+                <div class="ab-move-list" id="abMoveList" style="max-height: 400px;"></div>
             </div>
 
         </div>

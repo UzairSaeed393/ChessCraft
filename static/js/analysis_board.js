@@ -200,37 +200,77 @@ document.addEventListener('DOMContentLoaded', () => {
                 displayEval = (evalVal >= 0 ? '+' : '') + evalVal;
             }
 
-            evalScore.textContent = displayEval;
-            evalDepth.textContent = `depth ${data.depth || '?'}`;
+            // 1. Update Eval Bar score overlay
+            const scoreTop = document.getElementById('evalBarScoreTop');
+            const scoreBottom = document.getElementById('evalBarScoreBottom');
+            if (scoreTop && scoreBottom) {
+                const isWhiteAdv = (mate !== null) ? mate > 0 : cp > 0;
+                if (orientation === 'white') {
+                    scoreTop.textContent = isWhiteAdv ? '' : displayEval;
+                    scoreBottom.textContent = isWhiteAdv ? displayEval : '';
+                } else {
+                    scoreTop.textContent = isWhiteAdv ? displayEval : '';
+                    scoreBottom.textContent = isWhiteAdv ? '' : displayEval;
+                }
+            }
 
             updateEvalBar(cp, mate);
 
-            if (data.best_move) {
-                try {
-                    const tmpBoard = new Chess(fen);
-                    const m = tmpBoard.move({ from: data.best_move.substring(0, 2), to: data.best_move.substring(2, 4), promotion: data.best_move.length > 4 ? data.best_move[4] : undefined });
-                    bestMoveText.textContent = m ? `Best: ${m.san}` : '';
-                } catch { bestMoveText.textContent = `Best: ${data.best_move}`; }
-            } else {
-                bestMoveText.textContent = '';
-            }
+            // 2. Update Combined Analysis Banner at top
+            const banner = document.getElementById('topAnalysisBanner');
+            const bannerEval = document.getElementById('bannerEval');
+            const bannerPv = document.getElementById('bannerPv');
 
-            const container = document.getElementById('engineLinesContainer');
-            if (container) {
-                if (data.lines && data.lines.length > 0) {
-                    container.innerHTML = data.lines.map(l => {
-                        const val = l.mate ? `M${l.mate}` : (l.evaluation > 0 ? '+' : '') + l.evaluation;
-                        const pvstr = (l.pv_san && l.pv_san.length > 0) ? l.pv_san.join(' ') : (l.pv || []).join(' ');
-                        return `<div class="ab-engine-line"><div class="line-eval">${val}</div><div class="line-pv" title="${pvstr}">${pvstr}</div></div>`;
-                    }).join('');
+            if (banner && bannerEval && bannerPv) {
+                bannerEval.textContent = displayEval;
+                
+                if (data.pv_san && data.pv_san.length > 0) {
+                    let formattedLine = '';
+                    let startPly = currentPly;
+                    let moveNum = Math.floor(startPly / 2) + 1;
+                    let isWhiteTurn = (startPly % 2 === 0);
+
+                    // Build formatted PV string: "1: e4 e5, 2: Nf3 Nc6"
+                    let pv = data.pv_san;
+                    let i = 0;
+                    
+                    while (i < pv.length) {
+                        if (isWhiteTurn) {
+                            formattedLine += `${moveNum}: ${pv[i]}`;
+                            if (pv[i+1]) {
+                                formattedLine += ` ${pv[i+1]}`;
+                                i += 2;
+                            } else {
+                                i += 1;
+                            }
+                            moveNum++;
+                        } else {
+                            // If it's black's turn, we show "... black_move"
+                            formattedLine += `${moveNum}: ... ${pv[i]}`;
+                            i += 1;
+                            isWhiteTurn = true; // next move starts with white
+                            moveNum++;
+                        }
+                        if (i < pv.length) formattedLine += ', ';
+                    }
+                    bannerPv.textContent = formattedLine;
                 } else {
-                    container.innerHTML = '';
+                    bannerPv.textContent = 'No follow-up moves found.';
                 }
+                banner.style.display = 'flex';
             }
 
             setStatus('success', 'Position analyzed.');
         } catch (err) {
             setStatus('error', 'Analysis failed: ' + err.message);
+            // Clear banner on failure
+            const banner = document.getElementById('topAnalysisBanner');
+            if (banner) banner.style.display = 'none';
+            // Clear bar overlay scores
+            ['evalBarScoreTop', 'evalBarScoreBottom'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.textContent = '';
+            });
         }
         analyzing = false;
     }
@@ -471,17 +511,29 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            try {
-                const testGame = new Chess(fen);
-                if (!testGame) throw new Error('Invalid');
-            } catch {
-                setStatus('error', 'Invalid FEN string. Please check the format.');
+            const testGame = new Chess();
+            const validation = testGame.validate_fen(fen);
+
+            if (!validation.valid) {
+                // Customized user-friendly messages for common errors
+                let msg = 'Invalid position: ' + validation.error;
+                if (validation.error_number === 5) msg = 'Invalid FEN: Each side must have exactly one King.';
+                if (validation.error_number === 7) msg = 'Invalid position: Opponent King is in check (impossible state).';
+                
+                setStatus('error', msg);
+                return;
+            }
+
+            // check_js validate_fen(5) is "more than one king" or "no king". 
+            // Let's be extra explicit about missing kings just in case.
+            if (fen.indexOf('k') === -1 || fen.indexOf('K') === -1) {
+                setStatus('error', 'Invalid position: Both players must have a King.');
                 return;
             }
 
             isSettingUp = false; // Switch to analysis mode
             initBoard(fen);
-            setStatus('success', 'Position loaded. Make moves to explore or view the engine evaluation.');
+            setStatus('success', 'Position loaded. Use the engine to evaluate.');
         });
 
         btnResetFen.addEventListener('click', () => {

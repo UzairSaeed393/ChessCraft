@@ -13,7 +13,6 @@
 
     // Chart instances (kept for destroy-on-reload)
     let trendChart = null;
-    let breakdownChart = null;
     let phaseChart = null;
 
     let activeUsername = null;
@@ -350,43 +349,52 @@
         });
     }
 
-    // ── Breakdown pie ──────────────────────────────────────
+    // ── Chess.com-style SVG icons for each move category ──
+    const CAT_ICONS = {
+        brilliant: `<svg viewBox="0 0 32 32" width="22" height="22"><circle cx="16" cy="16" r="15" fill="#29d0d0"/><text x="16" y="21" text-anchor="middle" font-size="16" font-weight="bold" fill="#fff">!!</text></svg>`,
+        great:     `<svg viewBox="0 0 32 32" width="22" height="22"><circle cx="16" cy="16" r="15" fill="#5b9cf6"/><text x="16" y="21" text-anchor="middle" font-size="16" font-weight="bold" fill="#fff">!</text></svg>`,
+        best:      `<svg viewBox="0 0 32 32" width="22" height="22"><circle cx="16" cy="16" r="15" fill="#81b64c"/><text x="16" y="21" text-anchor="middle" font-size="17" fill="#fff">★</text></svg>`,
+        excellent: `<svg viewBox="0 0 32 32" width="22" height="22"><circle cx="16" cy="16" r="15" fill="#81b64c"/><text x="16" y="21" text-anchor="middle" font-size="14" fill="#fff">👍</text></svg>`,
+        good:      `<svg viewBox="0 0 32 32" width="22" height="22"><circle cx="16" cy="16" r="15" fill="#97bc5a"/><text x="16" y="20" text-anchor="middle" font-size="13" fill="#fff">●</text></svg>`,
+        book:      `<svg viewBox="0 0 32 32" width="22" height="22"><circle cx="16" cy="16" r="15" fill="#d4a843"/><text x="16" y="21" text-anchor="middle" font-size="14" fill="#fff">📖</text></svg>`,
+        inaccuracy:`<svg viewBox="0 0 32 32" width="22" height="22"><circle cx="16" cy="16" r="15" fill="#f0a848"/><text x="16" y="21" text-anchor="middle" font-size="16" font-weight="bold" fill="#fff">?!</text></svg>`,
+        miss:      `<svg viewBox="0 0 32 32" width="22" height="22"><circle cx="16" cy="16" r="15" fill="#e87040"/><text x="16" y="20" text-anchor="middle" font-size="14" fill="#fff">…</text></svg>`,
+        mistake:   `<svg viewBox="0 0 32 32" width="22" height="22"><circle cx="16" cy="16" r="15" fill="#e05555"/><text x="16" y="21" text-anchor="middle" font-size="16" font-weight="bold" fill="#fff">?</text></svg>`,
+        blunder:   `<svg viewBox="0 0 32 32" width="22" height="22"><circle cx="16" cy="16" r="15" fill="#ca3431"/><text x="16" y="21" text-anchor="middle" font-size="16" font-weight="bold" fill="#fff">??</text></svg>`,
+    };
+
+    // ── Breakdown list (chess.com style) ──────────────────
     function renderBreakdown(data) {
-        if (breakdownChart) breakdownChart.destroy();
-        const ctx = document.getElementById('breakdownChart');
-        if (!ctx) return;
+        const container = document.getElementById('breakdownList');
+        if (!container) return;
 
-        const catOrder = ['best','excellent','book','inaccuracy','mistake','blunder'];
-        const values = catOrder.map(k => data[k] || 0);
-        const total = values.reduce((sum, val) => sum + val, 0) || 1;
-        // Include the count and percentage directly in the legend label
-        const labels = catOrder.map(k => {
-            const val = data[k] || 0;
-            const pct = ((val / total) * 100).toFixed(1);
-            return `${CAT_LABELS[k]} (${val}) - ${pct}%`;
-        });
-        const colors = catOrder.map(k => CAT_COLORS[k]);
+        const catOrder = ['brilliant','great','best','excellent','good','book','inaccuracy','miss','mistake','blunder'];
+        const total = catOrder.reduce((sum, k) => sum + (data[k] || 0), 0) || 1;
 
-        breakdownChart = new Chart(ctx, {
-            type: 'doughnut',
-            data: {
-                labels,
-                datasets: [{ data: values, backgroundColor: colors, borderWidth: 1, borderColor: '#2a2927' }],
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                cutout: '60%',
-                plugins: {
-                    legend: {
-                        position: 'right',
-                        labels: { boxWidth: 10, padding: 8, font: { size: 11 } },
-                    },
-                    tooltip: { callbacks: { label: item => `${item.label}` } },
-                },
-            },
+        let html = '';
+        catOrder.forEach(key => {
+            const count = data[key] || 0;
+            const pct = ((count / total) * 100).toFixed(1);
+            const barWidth = Math.max(count > 0 ? 2 : 0, (count / total) * 100); // min 2% if > 0
+
+            html += `
+                <div class="bd-row">
+                    <div class="bd-icon">${CAT_ICONS[key]}</div>
+                    <div class="bd-info">
+                        <div class="bd-label-row">
+                            <span class="bd-name">${CAT_LABELS[key]}</span>
+                            <span class="bd-count">${count} <span class="bd-pct">(${pct}%)</span></span>
+                        </div>
+                        <div class="bd-bar-track">
+                            <div class="bd-bar-fill" style="width:${barWidth}%;background:${CAT_COLORS[key]}"></div>
+                        </div>
+                    </div>
+                </div>`;
         });
+
+        container.innerHTML = html;
     }
+
 
     // ── Phase chart ────────────────────────────────────────
     function renderPhases(data) {
@@ -400,43 +408,61 @@
                 labels: ['Opening', 'Middlegame', 'Endgame'],
                 datasets: [
                     {
-                        label: 'White',
-                        data: [data.white.opening || null, data.white.middlegame || null, data.white.endgame || null],
-                        backgroundColor: 'rgba(210,180,60,0.8)',
+                        label: 'Your Play as White',
+                        data: [data.white.opening || 0, data.white.middlegame || 0, data.white.endgame || 0],
+                        backgroundColor: 'rgba(210,180,60,0.85)',
+                        borderWidth: 0,
                     },
                     {
-                        label: 'Black',
-                        data: [data.black.opening || null, data.black.middlegame || null, data.black.endgame || null],
-                        backgroundColor: 'rgba(91,156,246,0.8)',
+                        label: 'Your Play as Black',
+                        data: [data.black.opening || 0, data.black.middlegame || 0, data.black.endgame || 0],
+                        backgroundColor: 'rgba(91,156,246,0.85)',
+                        borderWidth: 0,
                     },
                     {
-                        label: 'Overall',
+                        label: 'Average Across All Your Sides',
                         data: [
-                            data.overall.opening || null, 
-                            data.overall.middlegame || null, 
-                            data.overall.endgame || null
+                            data.overall.opening || 0, 
+                            data.overall.middlegame || 0, 
+                            data.overall.endgame || 0
                         ],
-                        backgroundColor: 'rgba(255,255,255,0.15)',
-                        borderColor: '#8a8480',
-                        borderWidth: 1,
+                        backgroundColor: 'rgba(255,255,255,0.08)',
+                        borderColor: '#888',
+                        borderWidth: 2,
                         type: 'line',
-                        tension: 0.4
+                        tension: 0.3,
+                        pointRadius: 4,
                     }
                 ],
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                barPercentage: 0.8,
+                categoryPercentage: 0.9,
                 scales: {
                     y: {
                         min: 0, max: 100,
                         grid: { color: 'rgba(255,255,255,0.05)' },
-                        ticks: { callback: v => v + '%' },
+                        ticks: { 
+                            callback: v => v + '%',
+                            font: { size: 10 }
+                        },
                     },
-                    x: { grid: { display: false } },
+                    x: { 
+                        grid: { display: false },
+                        ticks: { font: { size: 10 } }
+                    },
                 },
                 plugins: {
-                    legend: { position: 'top', labels: { boxWidth: 12, padding: 10 } },
+                    legend: { 
+                        position: 'top', 
+                        labels: { 
+                            boxWidth: 8, 
+                            padding: 10,
+                            font: { size: 10 } 
+                        } 
+                    },
                     tooltip: { callbacks: { label: i => `${i.dataset.label}: ${i.raw}%` } },
                 },
             },
@@ -463,26 +489,45 @@
     }
 
     function renderOpenings(data) {
-        const tbody = document.getElementById('openingsBody');
-        if (!tbody) return;
+        const container = document.getElementById('openingsContent');
+        if (!container) return;
         if (!data.length) {
-            tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:#8a8480;padding:20px">No data yet. Analyze some games first.</td></tr>`;
+            container.innerHTML = `<div style="text-align:center;color:#8a8480;padding:20px">No data yet. Analyze some games first.</div>`;
             return;
         }
-        tbody.innerHTML = data.map((row, i) => {
+        let html = '';
+        data.forEach((row, i) => {
             const wr = row.win_rate;
             const wrClass = wr >= 55 ? 'good' : wr >= 40 ? 'avg' : 'bad';
+            const total = row.wins + row.draws + row.losses || 1;
+            const wPct = ((row.wins / total) * 100).toFixed(0);
+            const dPct = ((row.draws / total) * 100).toFixed(0);
+            const lPct = ((row.losses / total) * 100).toFixed(0);
             const gameUrl = `/user/game/?username=${encodeURIComponent(activeUsername)}&opening=${encodeURIComponent(row.opening)}`;
-            return `<tr onclick="window.location.href='${gameUrl}'" title="View games with this opening">
-                <td style="color:#8a8480">${i + 1}</td>
-                <td class="opening-name-cell">${row.opening}</td>
-                <td>${row.games}</td>
-                <td class="mini-w">${row.wins}</td>
-                <td class="mini-d">${row.draws}</td>
-                <td class="mini-l">${row.losses}</td>
-                <td class="win-rate-cell ${wrClass}">${wr}%</td>
-            </tr>`;
-        }).join('');
+
+            html += `
+                <div class="opening-card" onclick="window.location.href='${gameUrl}'" title="View games with this opening">
+                    <div class="oc-header">
+                        <span class="oc-rank">${i + 1}</span>
+                        <span class="oc-name">${row.opening}</span>
+                        <span class="oc-games">${row.games} game${row.games > 1 ? 's' : ''}</span>
+                    </div>
+                    <div class="oc-bar-row">
+                        <div class="oc-bar-track">
+                            <div class="oc-bar-w" style="width:${wPct}%" title="Wins: ${row.wins}"></div>
+                            <div class="oc-bar-d" style="width:${dPct}%" title="Draws: ${row.draws}"></div>
+                            <div class="oc-bar-l" style="width:${lPct}%" title="Losses: ${row.losses}"></div>
+                        </div>
+                    </div>
+                    <div class="oc-stats">
+                        <span class="mini-w">W: ${row.wins}</span>
+                        <span class="mini-d">D: ${row.draws}</span>
+                        <span class="mini-l">L: ${row.losses}</span>
+                        <span class="win-rate-cell ${wrClass}">${wr}%</span>
+                    </div>
+                </div>`;
+        });
+        container.innerHTML = html;
     }
 
     // ── Tips ───────────────────────────────────────────────

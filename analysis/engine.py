@@ -199,13 +199,26 @@ class StockfishManager:
         if elo_limit:
             payload["elo"] = elo_limit
             
-        response = requests.post(
-            self.remote_url,
-            json=payload,
-            headers=headers,
-            timeout=self.remote_timeout,
-        )
-        response.raise_for_status()
+        try:
+            response = requests.post(
+                self.remote_url,
+                json=payload,
+                headers=headers,
+                timeout=self.remote_timeout,
+            )
+            response.raise_for_status()
+        except requests.exceptions.RequestException as e:
+            # Provide more helpful error if the remote engine says no
+            if hasattr(e, 'response') and e.response is not None:
+                try:
+                    err_json = e.response.json()
+                    msg = err_json.get('error', str(e))
+                except:
+                    msg = str(e)
+            else:
+                msg = str(e)
+            raise RuntimeError(f"Remote engine failure: {msg}")
+
         body = response.json()
 
         # Check if the server responds with an array of "lines"
@@ -494,6 +507,7 @@ def classify_move(
     best_move_uci = (best_move_uci or "").strip()
     is_best = move_uci and move_uci == best_move_uci
 
+    # Convert evals to side-relative POV
     cp_before_pov = 0
     cp_after_pov = 0
     if cp_before is not None and cp_after is not None:
@@ -504,11 +518,7 @@ def classify_move(
             cp_before_pov = int(cp_before)
             cp_after_pov = int(cp_after)
 
-    # Deterministic rule: exact engine move is always Best.
-    if is_best:
-        return "best"
-
-    # If the move walks into a fresh forced mate, treat it as a blunder.
+    # Side-relative mate values
     side_mate_before = None
     side_mate_after = None
     if mate_before is not None:
@@ -516,20 +526,94 @@ def classify_move(
     if mate_after is not None:
         side_mate_after = int(mate_after) if side != "black" else -int(mate_after)
 
+    # ─── Checkmate is ALWAYS "best" ───
+    try:
+        move_obj = chess.Move.from_uci(move_uci)
+        test_board = board_before.copy()
+        if move_obj in test_board.legal_moves:
+            test_board.push(move_obj)
+            if test_board.is_checkmate():
+                return "best"
+    except (ValueError, IndexError):
+        pass
+
+    # ─── Walking into a fresh forced mate against us → blunder ───
     if side_mate_after is not None and side_mate_after < 0:
         if side_mate_before is None or side_mate_before >= 0:
             return "blunder"
 
-    # CAPS2-like core grading buckets.
-    if cp_loss <= 15:
+    # ─── If the move walks into forced mate for us being shortened, still bad ───
+    if side_mate_after is not None and side_mate_after < 0:
+        if side_mate_before is not None and side_mate_before < 0:
+            # Already in a losing forced-mate sequence
+            if abs(side_mate_after) < abs(side_mate_before):
+                # Mate got shorter (worse for us)
+                return "mistake"
+
+    # ─── Brilliant: Best move + involves a sacrifice ───
+    if is_best and cp_loss <= 5:
+        try:
+            move_obj = chess.Move.from_uci(move_uci)
+            if is_sacrifice_move(board_before, move_obj):
+                # Must lead to an advantage or maintain one
+                if cp_after_pov >= -50:
+                    return "brilliant"
+        except (ValueError, IndexError):
+            pass
+
+    # ─── Great: Best move in a critical position where only this move works ───
+    # A "great" move is when you're in a position where the best move is 
+    # significantly better than the second-best (i.e., only move that doesn't worsen).
+    # Since we don't have multipv data here, we approximate:
+    # The move is best + the position was tense + advantage is maintained
+    if is_best and cp_loss <= 5:
+        # Position was critical: either we were slightly worse or close to equal
+        # and this move is the engine's top choice
+        if -150 <= cp_before_pov <= 50 and cp_after_pov >= cp_before_pov - 10:
+            # In tense/defensive positions, the only surviving move is "great"
+            if cp_before_pov < 0:
+                return "great"
+
+    # ─── Best: exact engine move ───
+    if is_best:
+        return "best"
+
+    # ─── Miss: Player had a chance to exploit opponent's blunder/mistake 
+    # but played a different (non-punishing) move ───
+    # Detected when: before_pov was very good (opponent blundered), and
+    # the player's move lets the advantage slip significantly
+    if cp_before_pov >= 150 and cp_loss >= 80:
+        # The player had a big advantage and didn't capitalize
+        # This is a "miss" if they were winning and let it slip
+        if cp_after_pov < cp_before_pov - 80:
+            return "miss"
+
+    # Also detect missed mate opportunities
+    if side_mate_before is not None and side_mate_before > 0:
+        # We had a forced mate and didn't play it
+        if side_mate_after is None or side_mate_after <= 0:
+            return "miss"
+        # We had mate in N but played a move that extends it significantly
+        if side_mate_after > side_mate_before + 3:
+            return "miss"
+
+    # ─── Win-percent based grading for remaining moves ───
+    # Using win% model gives more chess.com-like accuracy
+    wp_before = win_percent_from_cp(cp_before_pov)
+    wp_after = win_percent_from_cp(cp_after_pov)
+    wp_loss = max(0, wp_before - wp_after)
+
+    # CAPS2-inspired grading using win% loss
+    if wp_loss <= 1.0 and cp_loss <= 10:
         return "excellent"
-    if cp_loss <= 40:
+    if wp_loss <= 3.0 and cp_loss <= 30:
         return "good"
-    if cp_loss <= 100:
+    if wp_loss <= 8.0 and cp_loss <= 80:
         return "inaccuracy"
-    if cp_loss <= 250:
+    if wp_loss <= 18.0 and cp_loss <= 200:
         return "mistake"
     return "blunder"
+
 
 
 def win_percent_from_cp(cp: int) -> float:
@@ -547,26 +631,38 @@ def move_accuracy_from_category(
     mate_before: int | None = None,
     mate_after: int | None = None,
     severe_streak: int = 0,
+    cp_before: int | None = None,
+    cp_after: int | None = None,
 ) -> float | None:
-    """CAPS2-style per-move grade: category score with mate and streak smoothing."""
+    """CAPS2-style per-move grade with win%-based fine-tuning."""
     base_scores = {
         "book": 100.0,
         "best": 100.0,
         "brilliant": 100.0,
-        "excellent": 90.0,
-        "great": 85.0,
-        "good": 75.0,
-        "inaccuracy": 50.0,
-        "mistake": 20.0,
-        "miss": 20.0,
+        "great": 100.0,
+        "excellent": 96.0,
+        "good": 82.5,
+        "inaccuracy": 45.0,
+        "miss": 15.0,
+        "mistake": 15.0,
         "blunder": 0.0,
     }
 
-    score = float(base_scores.get(category, 75.0))
+    score = float(base_scores.get(category, 72.0))
 
-    # Fine-tune within each bucket without changing category identity.
-    if category in {"excellent", "great", "good", "inaccuracy", "mistake", "miss", "blunder"}:
-        score -= min(15.0, max(0, cp_loss) / 30.0)
+    # Win%-based fine-tuning within buckets for more accurate grading
+    if category in {"excellent", "good", "inaccuracy", "mistake", "miss", "blunder"}:
+        # Use win% loss if we have the data, otherwise fall back to cp_loss
+        if cp_before is not None and cp_after is not None:
+            cp_before_pov = -int(cp_before) if side == "black" else int(cp_before)
+            cp_after_pov = -int(cp_after) if side == "black" else int(cp_after)
+            wp_before = win_percent_from_cp(cp_before_pov)
+            wp_after = win_percent_from_cp(cp_after_pov)
+            wp_loss = max(0, wp_before - wp_after)
+            # Scale penalty based on win% lost (more meaningful than raw cp)
+            score -= min(12.0, wp_loss * 0.8)
+        else:
+            score -= min(12.0, max(0, cp_loss) / 30.0)
 
     side_mate_before = None
     side_mate_after = None
@@ -579,7 +675,7 @@ def move_accuracy_from_category(
     if side_mate_after is not None and side_mate_after < 0:
         if side_mate_before is None or side_mate_before >= 0:
             # Freshly entering forced mate should score very poorly.
-            score = min(score, 10.0 if abs(side_mate_after) <= 3 else 15.0)
+            score = min(score, 8.0 if abs(side_mate_after) <= 3 else 12.0)
         else:
             # Already in a forced-mate sequence: avoid cascading over-penalties.
             score = max(score, 40.0)
@@ -594,6 +690,7 @@ def move_accuracy_from_category(
         score = 100.0 - penalty
 
     return round(max(0.0, min(100.0, score)), 1)
+
 
 
 def accuracy_from_move_accuracies(move_accuracies: list[float]) -> float:
