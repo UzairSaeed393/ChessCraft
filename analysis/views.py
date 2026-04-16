@@ -41,7 +41,7 @@ CATEGORIES = [
 ]
 
 PHASES = ["opening", "middlegame", "endgame"]
-REVIEW_ALGO_VERSION = 7
+REVIEW_ALGO_VERSION = 8
 OPENING_API_BLOCKED = False
 
 
@@ -57,10 +57,6 @@ def _phase_for_position(board: chess.Board, ply_index: int) -> str:
     
     Material values: P=1, N=3, B=3, R=5, Q=9
     Total starting material (excluding kings) = 78 (39 per side)
-    
-    Opening:  Total material >= 62 (less than ~2 minor pieces traded)
-    Endgame:  No queens on either side, OR total material <= 24
-    Middlegame: Everything else
     """
     piece_values = {
         chess.PAWN: 1,
@@ -92,8 +88,10 @@ def _phase_for_position(board: chess.Board, ply_index: int) -> str:
     if white_queens == 0 and black_queens == 0 and total_material <= 32:
         return "endgame"
     
-    # Opening: most material still on the board (less than ~2 minor pieces traded)
-    if total_material >= 62:
+    # Opening: most material still on the board and early in the game
+    # Opening transitions to middlegame if more than 2 minor pieces are traded
+    # OR if we are past move 10 (ply 20)
+    if ply_index <= 20 and total_material >= 70:
         return "opening"
     
     return "middlegame"
@@ -317,25 +315,17 @@ def _build_game_review_payload(game_obj, user, priority=0) -> tuple[dict, SavedA
             cp_gain = cp_before - cp_after
             potential_gain = cp_loss
 
-        # Apply Book detection now that we have CP loss
+        # Apply Book detection pure API classification
         if in_book and ply_index <= 20:
             info = _fetch_opening_info(session, fen_before, move_uci=move_uci)
             if info.get("failed"):
-                # Offline Fallback if Lichess is rate-limited: 
-                # First 3 full moves (6 plies) that don't lose advantage are "book"
-                if ply_index <= 6 and cp_loss <= 25:
-                    is_book = True
-                else:
-                    in_book = False
+                # If API fails, do not assume book. Pure classification.
+                in_book = False
             else:
                 if info["is_theory"]:
-                    # Treat as book only if the move does not already lose too much.
-                    if cp_loss <= 40:
-                        is_book = True
-                        if info["name"]:
-                            opening_name = info["name"]
-                    else:
-                        in_book = False
+                    is_book = True
+                    if info["name"]:
+                        opening_name = info["name"]
                 else:
                     in_book = False
         else:

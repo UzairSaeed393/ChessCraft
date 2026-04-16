@@ -373,7 +373,7 @@
 
 .review-stage {
     display: grid;
-    grid-template-columns: minmax(0, 2.7fr) minmax(280px, 1fr);
+    grid-template-columns: minmax(0, 2.4fr) minmax(320px, 1fr);
     gap: 20px;
 }
 
@@ -425,9 +425,7 @@
 
 .main-board {
     width: 100%;
-    height: 100%;
-    max-width: 90vh;
-    aspect-ratio: 1 / 1;
+    max-width: 80vh;
     border-radius: 8px;
     overflow: hidden;
     box-sizing: border-box;
@@ -447,38 +445,26 @@
 
 #mainBoard .move-annotation {
     position: absolute;
-    right: 6px;
-    top: 6px;
-    width: 22px;
-    height: 22px;
+    right: 4px;
+    top: 4px;
+    width: 26px;
+    height: 26px;
     border-radius: 999px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 0.9rem;
+    font-size: 0.95rem;
     line-height: 1;
     padding: 0;
     pointer-events: none;
     z-index: 5;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.6);
     border: 2px solid rgba(255,255,255,0.9);
-    background: #fff !important;
-    opacity: 1 !important; /* Fully opaque */
-    color: #1f1f1f !important;
 }
 
-#mainBoard .move-annotation.chip-book { background: #fff !important; color: #d5a56d !important; border-color: #d5a56d; }
-#mainBoard .move-annotation.chip-brilliant { background: #fff !important; color: var(--review-cyan) !important; border-color: var(--review-cyan); }
-#mainBoard .move-annotation.chip-great { background: #fff !important; color: #98d2ff !important; border-color: #98d2ff; }
-#mainBoard .move-annotation.chip-best { background: #fff !important; color: #9be351 !important; border-color: #9be351; }
-#mainBoard .move-annotation.chip-excellent { background: #fff !important; color: #77d178 !important; border-color: #77d178; }
-#mainBoard .move-annotation.chip-good { background: #fff !important; color: #e6c86e !important; border-color: #e6c86e; }
-#mainBoard .move-annotation.chip-inaccuracy { background: #fff !important; color: #f7a84b !important; border-color: #f7a84b; }
-#mainBoard .move-annotation.chip-miss { background: #fff !important; color: #ffab85 !important; border-color: #ffab85; }
-#mainBoard .move-annotation.chip-mistake { background: #fff !important; color: #ff9a8d !important; border-color: #ff9a8d; }
-#mainBoard .move-annotation.chip-blunder { background: #fff !important; color: var(--review-red) !important; border-color: var(--review-red); }
-
-#mainBoard .move-annotation i {
+/* We ensure icons inside the marker are centered properly */
+#mainBoard .move-annotation i,
+#mainBoard .move-annotation svg {
     margin: 0;
 }
 
