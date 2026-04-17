@@ -9,8 +9,8 @@ In local development, you use `python manage.py runserver`. In production, this 
 First, SSH into your server, clone your repository, and create a virtual environment:
 
 ```bash
-# Clone the repo (you should be pulling the 'main' branch)
-git clone https://github.com/UzairSaeed393/ChessCraft.git
+# Clone the repo (you should be pulling the 'production' branch for your server)
+git clone -b production https://github.com/UzairSaeed393/ChessCraft.git
 cd ChessCraft
 
 # Create and activate virtual environment
@@ -42,7 +42,12 @@ DB_PORT=5432
 
 # Other configs
 SITE_URL=https://chesscraft.me
-ANALYSIS_ENGINE_MODE=local
+ANALYSIS_ENGINE_MODE=remote
+
+# --- PRO TIP ---
+# We have created a 'production.env.template' in the root folder.
+# Copy it to .env: cp production.env.template .env
+# Then edit it with your production secrets.
 ```
 
 ## 3. Database and Static Files
@@ -139,9 +144,9 @@ sudo certbot --nginx -d chesscraft.me -d www.chesscraft.me
 ## 8. Development Updates Flow
 
 When updating your app with new features:
-1. Develop on your `next-update` branch on your local machine.
-2. Once testing is complete, merge `next-update` into `main`.
-3. Push to GitHub (`git push origin main`).
-4. On your production server, pull the branch (`git pull origin main`).
+1. Develop on your `main` branch on your local machine.
+2. Once testing is complete, merge `main` into `production`.
+3. Push both to GitHub (`git push origin main`, `git push origin production`).
+4. On your production server, pull the branch (`git pull origin production`).
 5. Run migrations/collectstatic if necessary.
 6. Restart Gunicorn: `sudo systemctl restart chesscraft.service`
