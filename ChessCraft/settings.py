@@ -65,29 +65,9 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-# 6. Production Security Hardening
-# These kick in only when DEBUG=False, keeping local dev easy
-if not DEBUG:
-    SECURE_SSL_REDIRECT = env.bool('SECURE_SSL_REDIRECT', default=True)
-    SESSION_COOKIE_SECURE = env.bool('SESSION_COOKIE_SECURE', default=True)
-    CSRF_COOKIE_SECURE = env.bool('CSRF_COOKIE_SECURE', default=True)
-    
-    # HSTS settings
-    SECURE_HSTS_SECONDS = 31536000  # 1 year
-    SECURE_HSTS_PRELOAD = True
-    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-    
-    # Required if you're behind an Nginx reverse proxy
-    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-else:
-    SECURE_SSL_REDIRECT = False
-    SESSION_COOKIE_SECURE = False
-    CSRF_COOKIE_SECURE = False
-
-
-# 7. ROOT URLCONF & WSGI
 ROOT_URLCONF = 'ChessCraft.urls'
-WSGI_APPLICATION = 'ChessCraft.wsgi.application'
+
+TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
         'DIRS': [os.path.join(BASE_DIR, 'templates')],
@@ -105,7 +85,9 @@ WSGI_APPLICATION = 'ChessCraft.wsgi.application'
     },
 ]
 
-# 8. Database Configuration
+WSGI_APPLICATION = 'ChessCraft.wsgi.application'
+
+# 6. Database Configuration
 # Default stays PostgreSQL. Set DB_ENGINE=sqlite on laptop for offline/local fallback.
 db_engine = env('DB_ENGINE', default='postgres').lower()
 
