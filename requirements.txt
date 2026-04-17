@@ -1,8 +1,0 @@
-Django>=4.2
-django-environ
-whitenoise
-gunicorn
-psycopg2-binary
-chess
-requests
-python-dotenv
