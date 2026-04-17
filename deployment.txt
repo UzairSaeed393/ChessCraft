@@ -23,6 +23,7 @@ pip install -r requirements.txt
 
 ## 2. Server Configuration (.env file)
 
+
 In production, you **MUST NOT** have `DEBUG=True`.
 Create a `.env` file in the same directory as your `manage.py` file with your production keys:
 

@@ -33,7 +33,7 @@ htmlcov/
 
 # Django collected static
 staticfiles/
-
+deployment.txt
 # Local overrides / secrets (keep actual source settings tracked)
 **/settings_local.py
 **/local_settings.py

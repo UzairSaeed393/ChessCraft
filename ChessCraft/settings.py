@@ -17,7 +17,7 @@ environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
 SECRET_KEY = env('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = env.bool('DEBUG', default=True)
+DEBUG = env.bool('DEBUG', default=False)
 
 # Combined your Azure Public IP and local development addresses
 allowed_hosts_str = env('ALLOWED_HOSTS', default='chesscraft.me,www.chesscraft.me,20.189.112.196,localhost,127.0.0.1')
