@@ -20,7 +20,11 @@ SECRET_KEY = env('SECRET_KEY')
 DEBUG = env.bool('DEBUG', default=False)
 
 # Combined your Azure Public IP and local development addresses
-ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['20.189.112.196','chesscraft.me', 'www.chesscraft.me', 'localhost', '127.0.0.1'])
+allowed_hosts_str = env('ALLOWED_HOSTS', default='chesscraft.me,www.chesscraft.me,20.189.112.196,localhost,127.0.0.1')
+ALLOWED_HOSTS = [host.strip() for host in allowed_hosts_str.split(',')]
+
+# CSRF Trusted Origins (Required for Django 4.0+ in production)
+CSRF_TRUSTED_ORIGINS = env.list('CSRF_TRUSTED_ORIGINS', default=['https://chesscraft.me', 'https://www.chesscraft.me'])
 
 
 # Analysis engine settings used by analysis.engine.StockfishManager
@@ -61,6 +65,26 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
+# 6. Production Security Hardening
+# These kick in only when DEBUG=False, keeping local dev easy
+if not DEBUG:
+    SECURE_SSL_REDIRECT = env.bool('SECURE_SSL_REDIRECT', default=True)
+    SESSION_COOKIE_SECURE = env.bool('SESSION_COOKIE_SECURE', default=True)
+    CSRF_COOKIE_SECURE = env.bool('CSRF_COOKIE_SECURE', default=True)
+    
+    # HSTS settings
+    SECURE_HSTS_SECONDS = 31536000  # 1 year
+    SECURE_HSTS_PRELOAD = True
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    
+    # Required if you're behind an Nginx reverse proxy
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+else:
+    SECURE_SSL_REDIRECT = False
+    SESSION_COOKIE_SECURE = False
+    CSRF_COOKIE_SECURE = False
+
+# 7. Templates and WSGI
 ROOT_URLCONF = 'ChessCraft.urls'
 
 TEMPLATES = [
@@ -83,7 +107,7 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'ChessCraft.wsgi.application'
 
-# 6. Database Configuration
+# 8. Database Configuration
 # Default stays PostgreSQL. Set DB_ENGINE=sqlite on laptop for offline/local fallback.
 db_engine = env('DB_ENGINE', default='postgres').lower()
 
