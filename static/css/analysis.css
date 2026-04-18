@@ -609,6 +609,7 @@
 
     .main-board {
         width: min(100%, 620px);
+        touch-action: none;
     }
 }
 
@@ -642,6 +643,7 @@
         width: 100%;
         max-width: 100%;
         max-height: none;
+        touch-action: none;
     }
 
     .eval-bar {
@@ -658,5 +660,6 @@
         min-width: 0;
         max-width: calc(100vw - 60px); 
         margin: 0 auto;
+        touch-action: none;
     }
 }

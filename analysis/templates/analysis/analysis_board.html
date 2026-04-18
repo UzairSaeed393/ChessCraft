@@ -63,6 +63,7 @@
         overflow: hidden;
         box-shadow: 0 8px 24px rgba(0,0,0,0.25);
         display: flex;
+        touch-action: none; /* Prevent mobile scroll during piece drag */
     }
     .ab-eval-bar-wrapper {
         width: 16px;
@@ -82,7 +83,7 @@
         height: 50%;
     }
     
-    #analysisBoard { flex: 1; height: auto; }
+    #analysisBoard { flex: 1; height: auto; touch-action: none; }
     .white-1e1d7 { background-color: #f0d9b5 !important; color: #b58863; }
     .black-3c85d { background-color: #b58863 !important; color: #f0d9b5; }
 
