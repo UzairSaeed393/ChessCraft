@@ -68,6 +68,8 @@
         // Start main loading
         show('insLoading');
         hide('insContent');
+        hide('insEmptyState');
+        hide('insError');
         checkHealth();
 
         // Tier 1: Fast Data (W/L Summary, Trend, Openings)
@@ -82,22 +84,13 @@
             show('insContent');
             
             if (summary.total_games === 0) {
-                // Show Empty Insights State
-                const main = document.getElementById('insContent');
-                main.innerHTML = `
-                    <div style="text-align:center; padding: 60px 20px; color: var(--ins-muted);">
-                        <i class="bi bi-bar-chart-steps" style="font-size: 3.5rem; color: #333; margin-bottom: 20px; display:block;"></i>
-                        <h2 style="color:#fff; margin-bottom: 12px;">No Analyzed Games Found</h2>
-                        <p style="max-width: 500px; margin: 0 auto 30px; font-size: 1.1rem;">
-                            Insights are generated from your analyzed games. 
-                            Start reviewing your games to see your strengths and weaknesses.
-                            Bullet games are skipped in Insights to keep the patterns meaningful.
-                        </p>
-                        <a href="/user/game/" class="err-btn retry" style="text-decoration:none; display:inline-block;">Go to My Games</a>
-                    </div>
-                `;
+                hide('insLoading');
+                show('insEmptyState');
                 return;
             }
+
+            hide('insEmptyState');
+            show('insContent');
 
             renderSummary(summary);
             renderTrend(trend);
@@ -542,7 +535,11 @@
     // ── Helpers ────────────────────────────────────────────
     async function fetchJSON(url) {
         try {
-            const r = await fetch(url);
+            // Add cache-busting timestamp to all API requests
+            const connector = url.includes('?') ? '&' : '?';
+            const timestampedUrl = `${url}${connector}_=${new Date().getTime()}`;
+            
+            const r = await fetch(timestampedUrl);
             const contentType = r.headers.get('content-type');
             
             if (!contentType || !contentType.includes('application/json')) {

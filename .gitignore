@@ -44,7 +44,7 @@ deployment.txt
 .vscode/
 .idea/
 *.code-workspace
-
+local.env.template
 # --- OS files ---
 .DS_Store
 Thumbs.db

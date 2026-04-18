@@ -9,6 +9,7 @@ from django.contrib.auth.decorators import login_required
 from django.db.models import Avg, Count, Sum, Q, Max
 from django.http import JsonResponse
 from django.shortcuts import render
+from django.views.decorators.cache import never_cache
 
 from analysis.models import SavedAnalysis
 from user.models import Game
@@ -107,6 +108,7 @@ def insights_home(request):
 
 
 @login_required
+@never_cache
 @api_error_handler
 def api_summary(request):
     username = request.GET.get('username', '').strip()
@@ -250,6 +252,7 @@ def api_summary(request):
 
 
 @login_required
+@never_cache
 @api_error_handler
 def api_trend(request):
     username = request.GET.get('username', '').strip()
@@ -286,6 +289,7 @@ def api_trend(request):
 
 
 @login_required
+@never_cache
 @api_error_handler
 def api_move_breakdown(request):
     username = request.GET.get('username', '').strip()
@@ -314,6 +318,7 @@ def api_move_breakdown(request):
 
 
 @login_required
+@never_cache
 @api_error_handler
 def api_openings(request):
     username = request.GET.get('username', '').strip()
@@ -361,6 +366,7 @@ def api_openings(request):
 
 
 @login_required
+@never_cache
 @api_error_handler
 def api_phases(request):
     username = request.GET.get('username', '').strip()

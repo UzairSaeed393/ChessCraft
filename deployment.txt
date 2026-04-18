@@ -4,7 +4,7 @@ This guide covers the necessary steps to deploy the ChessCraft Django applicatio
 
 ## 1. Setting up the Production Environment
 
-In local development, you use `python manage.py runserver`. In production, this is insecure and slow. Instead, we use **Gunicorn** to serve the python app, and we use **WhiteNoise** to serve the static files (like your CSS and JavaScript).
+In local development, you use `python3 manage.py runserver`. In production, this is insecure and slow. Instead, we use **Gunicorn** to serve the python app, and we use **WhiteNoise** to serve the static files (like your CSS and JavaScript).
 
 First, SSH into your server, clone your repository, and create a virtual environment:
 
@@ -56,10 +56,10 @@ ANALYSIS_ENGINE_MODE=remote
 Run your migrations and collect all CSS/JS files into one root folder so WhiteNoise can serve them safely:
 
 ```bash
-python manage.py migrate
+python3 manage.py migrate
 
 # This command moves all static files to staticfile/ directory
-python manage.py collectstatic --noinput
+python3 manage.py collectstatic --noinput
 ```
 
 ## 4. Running the App with Gunicorn

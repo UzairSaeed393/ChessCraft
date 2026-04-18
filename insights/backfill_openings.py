@@ -1,7 +1,7 @@
 """
 One-time script to backfill opening names.
-Run with: python manage.py runscript backfill_openings
-Or just: python insights/backfill_openings.py  (from project root)
+Run with: python3 manage.py runscript backfill_openings
+Or just: python3 insights/backfill_openings.py  (from project root)
 """
 import os, sys, django
 

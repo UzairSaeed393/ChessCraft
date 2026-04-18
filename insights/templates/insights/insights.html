@@ -83,6 +83,20 @@
         </div>
     </div>
 
+    <!-- Empty State (Shown when no analyzed games are found) -->
+    <div id="insEmptyState" class="ins-empty-state" style="display:none">
+        <div style="text-align:center; padding: 60px 20px; color: var(--ins-muted);">
+            <i class="bi bi-bar-chart-steps" style="font-size: 3.5rem; color: #333; margin-bottom: 20px; display:block;"></i>
+            <h2 style="color:#fff; margin-bottom: 12px;">No Analyzed Games Found</h2>
+            <p style="max-width: 500px; margin: 0 auto 30px; font-size: 1.1rem;">
+                Insights are generated from your analyzed games. 
+                Start reviewing your games to see your strengths and weaknesses.
+                Bullet games are skipped in Insights to keep the patterns meaningful.
+            </p>
+            <a href="/user/game/" class="err-btn retry" style="text-decoration:none; display:inline-block;">Go to My Games</a>
+        </div>
+    </div>
+
     <!-- Main content (hidden until loaded) -->
     <div id="insContent" style="display:none">
 
