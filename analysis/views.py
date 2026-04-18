@@ -903,6 +903,11 @@ def api_analyze_period(request):
         date_played__gte=start_date
     ).order_by("-date_played")
 
+    # Exclude bullet time controls from bulk analysis here to match Insights behavior
+    games_to_analyze = games_to_analyze.exclude(
+        time_control__in=['60', '60+1', '60+2', '30', '120', '120+1']
+    )
+
     if not games_to_analyze.exists():
         return JsonResponse({"status": "no_games", "message": "All games in this period are already analyzed."})
 

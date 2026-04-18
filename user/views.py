@@ -10,7 +10,6 @@ from analysis.models import SavedAnalysis
 from .utils import fetch_and_save_games
 from .models import Game
 
-
 @login_required
 def profile_view(request):
     if request.method == 'POST':
@@ -83,7 +82,14 @@ def game_view(request):
     if request.method == "POST":
         # 1. Capture data from the form
         chess_username = (request.POST.get('chess_username') or '').strip()
-        date_range = request.POST.get('range', 'month') # Default to month if none selected
+        date_range = (request.POST.get('range') or 'month').strip().lower()
+        range_labels = {
+            'week': 'last 7 days',
+            '60': 'last 60 days',
+            'month': 'last 30 days',
+        }
+        if date_range not in range_labels:
+            date_range = 'month'
         
         # 2. Update user profile if the username is provided/changed
         if chess_username and request.user.chess_username != chess_username:
@@ -98,7 +104,7 @@ def game_view(request):
         success = fetch_and_save_games(request.user, chess_username, date_range)
         
         if success:
-            messages.success(request, f"Successfully fetched your {date_range}ly games!")
+            messages.success(request, f"Successfully fetched your games for {range_labels[date_range]}.")
         else:
             messages.error(request, "Could not fetch games. Please verify the username and try again.")
         
@@ -107,6 +113,13 @@ def game_view(request):
     # GET request: Paginate games belonging to this user, newest first
     username_filter = request.GET.get('username', '').strip()
     opening_filter = request.GET.get('opening', '').strip()
+    # Provide list of usernames for selector (when user has imported multiple Chess.com accounts)
+    chess_usernames = (
+        Game.objects.filter(user=request.user)
+        .order_by('chess_username_at_time')
+        .values_list('chess_username_at_time', flat=True)
+        .distinct()
+    )
     
     games_qs = Game.objects.filter(user=request.user).order_by('-date_played')
     
@@ -127,6 +140,8 @@ def game_view(request):
             'paginator': paginator,
             'total_games': games_qs.count(),
             'opening_filter': opening_filter,
+            'chess_usernames': list(chess_usernames),
+            'active_username': username_filter,
         },
     )
 

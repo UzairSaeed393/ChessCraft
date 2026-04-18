@@ -17,4 +17,16 @@ document.addEventListener('DOMContentLoaded', function() {
             if (loader) loader.style.display = 'block';
         });
     }
+
+    // Player selector buttons (if present on page)
+    document.querySelectorAll('.player-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const uname = btn.dataset.username || '';
+            const params = new URLSearchParams(window.location.search);
+            if (uname) params.set('username', uname);
+            else params.delete('username');
+            // Preserve opening filter and page
+            window.location.search = params.toString();
+        });
+    });
 });

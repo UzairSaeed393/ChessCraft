@@ -91,6 +91,7 @@
                         <p style="max-width: 500px; margin: 0 auto 30px; font-size: 1.1rem;">
                             Insights are generated from your analyzed games. 
                             Start reviewing your games to see your strengths and weaknesses.
+                            Bullet games are skipped in Insights to keep the patterns meaningful.
                         </p>
                         <a href="/user/game/" class="err-btn retry" style="text-decoration:none; display:inline-block;">Go to My Games</a>
                     </div>

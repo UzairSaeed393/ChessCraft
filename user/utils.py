@@ -74,10 +74,10 @@ def fetch_and_save_games(user, chess_username, date_range):
     now = timezone.now()
     if date_range == 'week':
         limit_date = now - timedelta(days=7)
-    elif date_range == 'month':
+    elif date_range == '30':
         limit_date = now - timedelta(days=30)
-    else:  # year
-        limit_date = now - timedelta(days=365)
+    else:
+        limit_date = now - timedelta(days=60)
 
     target_archives = _target_archives_for_limit(archives, limit_date)
 

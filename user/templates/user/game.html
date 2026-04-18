@@ -28,11 +28,23 @@
                         <label for="range">Time Period</label>
                         <select name="range" id="range">
                             <option value="week">Last 7 Days</option>
+                            <option value="60">Last 60 Days</option>
                             <option value="month" selected>Last 30 Days</option>
-                            <option value="year">Last Year</option>
                         </select>
                     </div>
                 </div>
+
+                {% if chess_usernames %}
+                <div class="form-group mt-3">
+                    <label for="playerFilter">Show Games For</label>
+                    <div id="playerFilter" style="display:flex;gap:8px;flex-wrap:wrap;">
+                        <button type="button" class="player-btn btn btn-sm btn-outline-secondary" data-username="">All</button>
+                        {% for uname in chess_usernames %}
+                        <button type="button" class="player-btn btn btn-sm btn-outline-secondary {% if uname == active_username %}active{% endif %}" data-username="{{ uname }}">{{ uname }}</button>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
 
                 <button type="submit" class="btn-fetch" id="fetchBtn">
                     <span class="btn-text">Sync Games</span>
