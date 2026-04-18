@@ -460,19 +460,6 @@ def _build_game_review_payload(game_obj, user, priority=0) -> tuple[dict, SavedA
     for side in ("white", "black"):
         for name, value in side_stats[side]["counts"].items():
             total_counts[name] += value
-
-    data = {
-        "id": game_obj.game_id,
-        "date": game_obj.date_played.isoformat() if game_obj.date_played else None,
-        "white": {"name": game_obj.white_player, "accuracy": white_accuracy, "rating": game_obj.white_rating or 0},
-        "black": {"name": game_obj.black_player, "accuracy": black_accuracy, "rating": game_obj.black_rating or 0},
-        "moves": moves_payload,
-        "eval_history": eval_history,
-        "opening": opening_name,
-        "counts": dict(total_counts),
-        "result_text": final_result_text,
-    }
-
     phase_accuracy = {
         "white": {
             phase: accuracy_from_move_accuracies(side_stats["white"]["phase"][phase])
@@ -524,7 +511,7 @@ def _build_game_review_payload(game_obj, user, priority=0) -> tuple[dict, SavedA
     analysis_record.save()
 
     # Identify user side and save accuracy to Game model
-    username_guess = (user.chess_username or user.username or "").lower()
+    username_guess = (game_obj.chess_username_at_time or user.chess_username or user.username or "").lower()
     user_side = "white"
     user_acc = white_accuracy
     if (game_obj.black_player or "").lower() == username_guess:
@@ -564,6 +551,7 @@ def _build_game_review_payload(game_obj, user, priority=0) -> tuple[dict, SavedA
         "phase_accuracy": phase_accuracy,
         "total_accuracy": round((white_accuracy + black_accuracy) / 2.0, 1),
         "opening_name": opening_name,
+        "result_text": final_result_text,
     }
 
     payload = {

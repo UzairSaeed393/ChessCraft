@@ -442,7 +442,9 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         const active = moveList.querySelector('.ab-move-cell.active');
-        if (active) active.scrollIntoView({ block: 'nearest' });
+        if (active) {
+            moveList.scrollTop = active.offsetTop - (moveList.clientHeight / 2);
+        }
     }
 
     function highlightMove(lineId, ply) {
@@ -450,7 +452,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const cell = moveList.querySelector(`.ab-move-cell[data-line-id="${lineId}"][data-ply="${ply}"]`);
         if (cell) {
             cell.classList.add('active');
-            cell.scrollIntoView({ block: 'nearest' });
+            moveList.scrollTop = cell.offsetTop - (moveList.clientHeight / 2);
         }
     }
 
