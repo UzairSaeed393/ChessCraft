@@ -87,17 +87,8 @@ def game_view(request):
         
         # 2. Update user profile if the username is provided/changed
         if chess_username and request.user.chess_username != chess_username:
-            User = get_user_model()
-            if User.objects.exclude(pk=request.user.pk).filter(chess_username__iexact=chess_username).exists():
-                messages.error(request, "That Chess.com username is already linked to another account.")
-                return redirect('game')
-
             request.user.chess_username = chess_username
-            try:
-                request.user.save()
-            except IntegrityError:
-                messages.error(request, "Could not save Chess.com username (it may already be in use).")
-                return redirect('game')
+            request.user.save()
 
         if not chess_username:
             messages.error(request, "Please enter a Chess.com username to fetch games.")
