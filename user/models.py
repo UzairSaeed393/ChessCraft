@@ -5,7 +5,7 @@ from django.contrib.auth.models import AbstractUser
 # This replaces the default Django User but keeps all login functionality.
 # Make sure to add 'AUTH_USER_MODEL = "user.User"' in your settings.py!
 class User(AbstractUser):
-    chess_username = models.CharField(max_length=100, unique=True, blank=True, null=True)
+    chess_username = models.CharField(max_length=100, blank=True, null=True)
     
     def __str__(self):
         return self.username
