@@ -16,6 +16,7 @@ class Game(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="games")
     chess_username_at_time = models.CharField(max_length=100)
     game_id = models.CharField(max_length=255)
+    fetched_at = models.DateTimeField(null=True, blank=True, auto_now_add=True, db_index=True)
     accuracy = models.FloatField(blank=True, null=True)
     date_played = models.DateTimeField(blank=True, null=True)
     white_player = models.CharField(max_length=100)

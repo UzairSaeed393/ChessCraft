@@ -1,6 +1,8 @@
 from django.contrib import admin
 from .models import ContactMessage, ErrorLog
 
+admin.site.index_template = 'admin/dashboard.html'
+
 @admin.register(ContactMessage)
 class ContactMessageAdmin(admin.ModelAdmin):
     list_display = ('first_name', 'last_name', 'email', 'subject', 'created_at')

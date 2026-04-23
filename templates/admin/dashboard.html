@@ -1,0 +1,55 @@
+{% extends "admin/index.html" %}
+{% load admin_dashboard %}
+
+{% block content %}
+  {% admin_dashboard_stats as stats %}
+
+  <div id="content-main">
+    <div class="module">
+      <h2>ChessCraft Overview</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Metric</th>
+            <th>Last 24h</th>
+            <th>Last 7 days</th>
+            <th>Last 30 days</th>
+            <th>Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th scope="row">Visitors (logins)</th>
+            <td>{{ stats.visitors_day|default_if_none:"—" }}</td>
+            <td>{{ stats.visitors_week|default_if_none:"—" }}</td>
+            <td>{{ stats.visitors_month|default_if_none:"—" }}</td>
+            <td>{{ stats.total_users|default_if_none:"—" }}</td>
+          </tr>
+          <tr>
+            <th scope="row">New users</th>
+            <td>{{ stats.new_users_day|default_if_none:"—" }}</td>
+            <td>{{ stats.new_users_week|default_if_none:"—" }}</td>
+            <td>{{ stats.new_users_month|default_if_none:"—" }}</td>
+            <td>{{ stats.total_users|default_if_none:"—" }}</td>
+          </tr>
+          <tr>
+            <th scope="row">Games fetched</th>
+            <td>{{ stats.games_fetched_day|default_if_none:"—" }}</td>
+            <td>{{ stats.games_fetched_week|default_if_none:"—" }}</td>
+            <td>{{ stats.games_fetched_month|default_if_none:"—" }}</td>
+            <td>{{ stats.total_games|default_if_none:"—" }}</td>
+          </tr>
+          <tr>
+            <th scope="row">Analyses created</th>
+            <td>{{ stats.analyses_day|default_if_none:"—" }}</td>
+            <td>{{ stats.analyses_week|default_if_none:"—" }}</td>
+            <td>{{ stats.analyses_month|default_if_none:"—" }}</td>
+            <td>{{ stats.total_analyses|default_if_none:"—" }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    {% include "admin/app_list.html" with app_list=app_list show_changelinks=True %}
+  </div>
+{% endblock %}
