@@ -24,6 +24,48 @@ class EngineResult:
     mate: int | None = None
 
 
+def _engine_result_to_payload(result: EngineResult) -> dict[str, Any]:
+    return {
+        "evaluation_cp": result.cp,
+        "evaluation": result.evaluation,
+        "best_move": result.best_move,
+        "pv": result.pv,
+        "depth": result.depth,
+        "mate": result.mate,
+    }
+
+
+def _payload_to_engine_result(body: dict[str, Any], depth: int) -> EngineResult:
+    cp = body.get("evaluation_cp")
+    mate = body.get("mate")
+    if cp is None:
+        raw_eval = body.get("evaluation")
+        if raw_eval is not None:
+            cp = int(float(raw_eval) * 100)
+        elif mate is not None:
+            cp = MATE_CP if int(mate) > 0 else -MATE_CP
+        else:
+            cp = 0
+
+    best_move = (body.get("best_move") or "").strip()
+    pv = body.get("pv") or body.get("principal_variation") or []
+    if isinstance(pv, str):
+        pv = [item for item in pv.split() if item]
+
+    if best_move and (not pv or pv[0] != best_move):
+        pv = [best_move, *pv]
+
+    result_depth = int(body.get("depth") or depth)
+    return EngineResult(
+        cp=int(cp),
+        evaluation=round(int(cp) / 100.0, 2),
+        best_move=best_move,
+        pv=pv,
+        depth=result_depth,
+        mate=(int(mate) if mate is not None else None),
+    )
+
+
 class StockfishManager:
     """Engine adapter: remote API first (Azure), local binary fallback."""
 
@@ -52,16 +94,37 @@ class StockfishManager:
     def get_health(self) -> dict[str, Any]:
         """Check if the remote engine is busy."""
         if self.mode != "remote" or not self.remote_url:
-            return {"status": "ok", "active_tasks": 0, "mode": self.mode}
+            local_bin = os.path.basename(self.local_path) if self.local_path else "stockfish"
+            return {
+                "status": "ok",
+                "active_tasks": 0,
+                "mode": self.mode,
+                "engine_version": f"local:{local_bin}",
+            }
         
         health_url = self.remote_url.replace("/analyze", "/health")
         try:
             response = requests.get(health_url, timeout=5)
             if response.ok:
                 return response.json()
-        except:
+        except Exception:
             pass
-        return {"status": "unknown", "active_tasks": 0}
+        return {
+            "status": "unknown",
+            "active_tasks": 0,
+            "engine_version": "remote:unknown",
+        }
+
+    def get_engine_version(self) -> str:
+        """Stable version token used for selective re-analysis caching."""
+        if self.mode == "remote" and self.remote_url:
+            health = self.get_health()
+            remote_version = str(health.get("engine_version") or "remote:unknown")
+            if remote_version.startswith("remote:"):
+                return remote_version
+            return f"remote:{remote_version}"
+        local_bin = os.path.basename(self.local_path) if self.local_path else "stockfish"
+        return f"local:{local_bin}"
 
     def get_analysis(self, fen: str, depth: int | None = None, multipv: int = 1, elo_limit: int | None = None, priority: int = 1) -> dict[str, Any]:
         """Return a normalized engine payload for UI and review pipelines."""
@@ -88,20 +151,28 @@ class StockfishManager:
         target_depth = depth or self.default_depth
 
         if self.mode == "remote":
-            results = self._analyze_batch_remote(fens, target_depth, multipv, priority=priority)
+            line_sets = self._analyze_batch_remote(fens, target_depth, multipv, priority=priority)
         else:
-            results = self._analyze_batch_local(fens, target_depth, multipv)
+            line_sets = self._analyze_batch_local(fens, target_depth, multipv)
 
         output = []
-        for result in results:
-            output.append({
-                "evaluation_cp": result.cp,
-                "evaluation": result.evaluation,
-                "best_move": result.best_move,
-                "pv": result.pv,
-                "depth": result.depth,
-                "mate": result.mate,
-            })
+        for lines in line_sets:
+            if not lines:
+                lines = [
+                    EngineResult(
+                        cp=0,
+                        evaluation=0.0,
+                        best_move="",
+                        pv=[],
+                        depth=target_depth,
+                        mate=None,
+                    )
+                ]
+
+            top = lines[0]
+            payload = _engine_result_to_payload(top)
+            payload["lines"] = [_engine_result_to_payload(item) for item in lines]
+            output.append(payload)
         return output
 
     def _analyze_remote(self, fen: str, depth: int, multipv: int, elo_limit: int | None = None, priority: int = 1) -> EngineResult:
@@ -129,34 +200,10 @@ class StockfishManager:
         response.raise_for_status()
         body = response.json()
 
-        cp = body.get("evaluation_cp")
-        mate = body.get("mate")
-        if cp is None:
-            raw_eval = body.get("evaluation")
-            if raw_eval is not None:
-                cp = int(float(raw_eval) * 100)
-            elif mate is not None:
-                cp = MATE_CP if int(mate) > 0 else -MATE_CP
-            else:
-                cp = 0
-
-        best_move = (body.get("best_move") or "").strip()
-        pv = body.get("pv") or body.get("principal_variation") or []
-        if isinstance(pv, str):
-            pv = [item for item in pv.split() if item]
-
-        if best_move and (not pv or pv[0] != best_move):
-            pv = [best_move, *pv]
-
-        result_depth = int(body.get("depth") or depth)
-        return EngineResult(
-            cp=int(cp),
-            evaluation=round(int(cp) / 100.0, 2),
-            best_move=best_move,
-            pv=pv,
-            depth=result_depth,
-            mate=(int(mate) if mate is not None else None),
-        )
+        lines_data = body.get("lines") if isinstance(body, dict) else None
+        if isinstance(lines_data, list) and lines_data:
+            return _payload_to_engine_result(lines_data[0], depth)
+        return _payload_to_engine_result(body, depth)
 
     def get_analysis_multipv(self, fen: str, depth: int | None = None, multipv: int = 3, elo_limit: int | None = None, priority: int = 1) -> list[dict[str, Any]]:
         """Return a normalized array of engine payloads for multi-PV."""
@@ -213,7 +260,7 @@ class StockfishManager:
                 try:
                     err_json = e.response.json()
                     msg = err_json.get('error', str(e))
-                except:
+                except Exception:
                     msg = str(e)
             else:
                 msg = str(e)
@@ -229,35 +276,9 @@ class StockfishManager:
 
         results = []
         for line_data in lines_data:
-            cp = line_data.get("evaluation_cp")
-            mate = line_data.get("mate")
-            if cp is None:
-                raw_eval = line_data.get("evaluation")
-                if raw_eval is not None:
-                    cp = int(float(raw_eval) * 100)
-                elif mate is not None:
-                    cp = MATE_CP if int(mate) > 0 else -MATE_CP
-                else:
-                    cp = 0
-
-            best_move = (line_data.get("best_move") or "").strip()
-            pv = line_data.get("pv") or line_data.get("principal_variation") or []
-            if isinstance(pv, str):
-                pv = [item for item in pv.split() if item]
-
-            if best_move and (not pv or pv[0] != best_move):
-                pv = [best_move, *pv]
-
-            result_depth = int(line_data.get("depth") or depth)
-            
-            results.append(EngineResult(
-                cp=int(cp),
-                evaluation=round(int(cp) / 100.0, 2),
-                best_move=best_move,
-                pv=pv,
-                depth=result_depth,
-                mate=(int(mate) if mate is not None else None),
-            ))
+            if not isinstance(line_data, dict):
+                continue
+            results.append(_payload_to_engine_result(line_data, depth))
             
         return results
 
@@ -361,7 +382,7 @@ class StockfishManager:
         finally:
             engine.quit()
 
-    def _analyze_batch_remote(self, fens: list[str], depth: int, multipv: int, priority: int = 1) -> list[EngineResult]:
+    def _analyze_batch_remote(self, fens: list[str], depth: int, multipv: int, priority: int = 1) -> list[list[EngineResult]]:
         if not self.remote_url:
             raise RuntimeError("ANALYSIS_ENGINE_URL is not configured for remote mode")
 
@@ -381,40 +402,55 @@ class StockfishManager:
             timeout=180,
         )
         response.raise_for_status()
-        
-        output = []
-        for body in response.json():
-            cp = body.get("evaluation_cp")
-            mate = body.get("mate")
-            if cp is None:
-                raw_eval = body.get("evaluation")
-                if raw_eval is not None:
-                    cp = int(float(raw_eval) * 100)
-                elif mate is not None:
-                    cp = MATE_CP if int(mate) > 0 else -MATE_CP
-                else:
-                    cp = 0
 
-            best_move = (body.get("best_move") or "").strip()
-            pv = body.get("pv") or []
-            if isinstance(pv, str):
-                pv = [item for item in pv.split() if item]
+        raw_items = response.json()
+        output: list[list[EngineResult]] = []
+        missing_multipv_indices: list[int] = []
 
-            if best_move and (not pv or pv[0] != best_move):
-                pv = [best_move, *pv]
+        for idx, body in enumerate(raw_items):
+            if not isinstance(body, dict):
+                output.append([])
+                missing_multipv_indices.append(idx)
+                continue
 
-            result_depth = int(body.get("depth") or depth)
-            output.append(EngineResult(
-                cp=int(cp),
-                evaluation=round(int(cp) / 100.0, 2),
-                best_move=best_move,
-                pv=pv,
-                depth=result_depth,
-                mate=(int(mate) if mate is not None else None),
-            ))
+            lines_data = body.get("lines") if isinstance(body.get("lines"), list) else None
+            if lines_data:
+                lines = []
+                for line_item in lines_data:
+                    if isinstance(line_item, dict):
+                        lines.append(_payload_to_engine_result(line_item, depth))
+                output.append(lines)
+                continue
+
+            output.append([_payload_to_engine_result(body, depth)])
+            if multipv > 1:
+                missing_multipv_indices.append(idx)
+
+        # Compatibility fallback for older remote batch servers that only return top line.
+        if multipv > 1 and missing_multipv_indices:
+            for idx in missing_multipv_indices:
+                try:
+                    output[idx] = self._analyze_remote_multipv(
+                        fen=fens[idx],
+                        depth=depth,
+                        multipv=multipv,
+                        priority=priority,
+                    )
+                except Exception:
+                    if not output[idx]:
+                        output[idx] = [
+                            EngineResult(
+                                cp=0,
+                                evaluation=0.0,
+                                best_move="",
+                                pv=[],
+                                depth=depth,
+                                mate=None,
+                            )
+                        ]
         return output
 
-    def _analyze_batch_local(self, fens: list[str], depth: int, multipv: int) -> list[EngineResult]:
+    def _analyze_batch_local(self, fens: list[str], depth: int, multipv: int) -> list[list[EngineResult]]:
         if not os.path.exists(self.local_path):
             raise RuntimeError(f"Stockfish binary not found at '{self.local_path}'")
 
@@ -423,39 +459,55 @@ class StockfishManager:
             config = {"Threads": self.local_threads, "Hash": self.local_hash}
             engine.configure(config)
             
-            output = []
+            output: list[list[EngineResult]] = []
+            time_limit = max(0.08, self.default_time * (depth / max(1, self.default_depth)))
             for fen in fens:
                 try:
                     board = chess.Board(fen)
                 except ValueError:
+                    output.append(
+                        [
+                            EngineResult(
+                                cp=0,
+                                evaluation=0.0,
+                                best_move="",
+                                pv=[],
+                                depth=depth,
+                                mate=None,
+                            )
+                        ]
+                    )
                     continue
                 
                 info = engine.analyse(
                     board,
-                    chess.engine.Limit(depth=depth, time=self.default_time),
+                    chess.engine.Limit(depth=depth, time=time_limit),
                     multipv=max(1, multipv),
                 )
-                top = info[0] if isinstance(info, list) else info
-                score = top.get("score")
-                pv_moves = top.get("pv") or []
-                
-                cp = 0
-                mate = None
-                if score is not None:
-                    cp = score.pov(chess.WHITE).score(mate_score=MATE_CP) or 0
-                    mate = score.pov(chess.WHITE).mate()
+                rows = info if isinstance(info, list) else [info]
+                fen_lines: list[EngineResult] = []
+                for row in rows:
+                    score = row.get("score")
+                    pv_moves = row.get("pv") or []
 
-                best_move = pv_moves[0].uci() if pv_moves else ""
-                pv = [mv.uci() for mv in pv_moves]
+                    cp = 0
+                    mate = None
+                    if score is not None:
+                        cp = score.pov(chess.WHITE).score(mate_score=MATE_CP) or 0
+                        mate = score.pov(chess.WHITE).mate()
 
-                output.append(EngineResult(
-                    cp=int(cp),
-                    evaluation=round(int(cp) / 100.0, 2),
-                    best_move=best_move,
-                    pv=pv,
-                    depth=depth,
-                    mate=mate,
-                ))
+                    best_move = pv_moves[0].uci() if pv_moves else ""
+                    pv = [mv.uci() for mv in pv_moves]
+                    fen_lines.append(EngineResult(
+                        cp=int(cp),
+                        evaluation=round(int(cp) / 100.0, 2),
+                        best_move=best_move,
+                        pv=pv,
+                        depth=depth,
+                        mate=mate,
+                    ))
+
+                output.append(fen_lines)
             return output
         finally:
             engine.quit()
@@ -486,6 +538,30 @@ def is_sacrifice_move(board_before: chess.Board, move: chess.Move) -> bool:
     return (before_points - after_points) >= 2
 
 
+def _is_tactical_pv(board_before: chess.Board, pv: list[str] | None) -> bool:
+    """Detect forcing tactical content in the first part of a PV line."""
+    if not pv:
+        return False
+
+    board = board_before.copy()
+    forcing = 0
+    for uci in pv[:2]:
+        try:
+            move = chess.Move.from_uci(uci)
+        except ValueError:
+            break
+
+        if move not in board.legal_moves:
+            break
+
+        if board.is_capture(move) or board.gives_check(move) or move.promotion:
+            forcing += 1
+
+        board.push(move)
+
+    return forcing >= 1
+
+
 def classify_move(
     cp_loss: int,
     cp_gain: int,
@@ -493,19 +569,31 @@ def classify_move(
     move_uci: str,
     best_move_uci: str,
     board_before: chess.Board,
+    second_best_move_uci: str | None = None,
+    second_best_cp: int | None = None,
+    move_rank: int | None = None,
+    best_pv: list[str] | None = None,
+    follow_pv: list[str] | None = None,
     is_book: bool = False,
     cp_before: int | None = None,
     cp_after: int | None = None,
     side: str | None = None,
     mate_before: int | None = None,
     mate_after: int | None = None,
+    best_mate: int | None = None,
+    second_best_mate: int | None = None,
 ) -> str:
     if is_book:
         return "book"
 
     move_uci = (move_uci or "").strip()
     best_move_uci = (best_move_uci or "").strip()
+    second_best_move_uci = (second_best_move_uci or "").strip()
     is_best = move_uci and move_uci == best_move_uci
+    if move_rank is None and is_best:
+        move_rank = 1
+    elif move_rank is None and second_best_move_uci and move_uci == second_best_move_uci:
+        move_rank = 2
 
     # Convert evals to side-relative POV
     cp_before_pov = 0
@@ -518,13 +606,27 @@ def classify_move(
             cp_before_pov = int(cp_before)
             cp_after_pov = int(cp_after)
 
+    second_best_pov = None
+    if second_best_cp is not None:
+        second_best_pov = -int(second_best_cp) if side == "black" else int(second_best_cp)
+
+    critical_gap = 0
+    if second_best_pov is not None:
+        critical_gap = max(0, cp_before_pov - second_best_pov)
+
     # Side-relative mate values
     side_mate_before = None
     side_mate_after = None
+    side_best_mate = None
+    side_second_best_mate = None
     if mate_before is not None:
         side_mate_before = int(mate_before) if side != "black" else -int(mate_before)
     if mate_after is not None:
         side_mate_after = int(mate_after) if side != "black" else -int(mate_after)
+    if best_mate is not None:
+        side_best_mate = int(best_mate) if side != "black" else -int(best_mate)
+    if second_best_mate is not None:
+        side_second_best_mate = int(second_best_mate) if side != "black" else -int(second_best_mate)
 
     # ─── Checkmate is ALWAYS "best" ───
     try:
@@ -550,33 +652,48 @@ def classify_move(
                 # Mate got shorter (worse for us)
                 return "mistake"
 
+    best_line_tactical = _is_tactical_pv(board_before, best_pv)
+    follow_line_tactical = _is_tactical_pv(board_before, follow_pv)
+    tactical_pv_shift = best_line_tactical and not follow_line_tactical and cp_loss >= 45
+
+    # Missed tactical chance: forcing best line exists but move sidesteps it.
+    if not is_best and tactical_pv_shift and cp_before_pov >= -120:
+        if cp_loss >= 70:
+            return "miss"
+        return "inaccuracy"
+
+    # Missed mating shot from top line.
+    if side_best_mate is not None and side_best_mate > 0 and not is_best:
+        if side_second_best_mate is None or side_second_best_mate <= 0:
+            return "miss"
+
     # ─── Brilliant: Best move + involves a sacrifice ───
     if is_best and cp_loss <= 5:
         try:
             move_obj = chess.Move.from_uci(move_uci)
             if is_sacrifice_move(board_before, move_obj):
-                # Must lead to an advantage or maintain one
-                if cp_after_pov >= -50:
+                # Must maintain practical soundness and usually be a critical line.
+                if cp_after_pov >= -70 and (critical_gap >= 70 or cp_after_pov >= cp_before_pov - 10):
                     return "brilliant"
         except (ValueError, IndexError):
             pass
 
-    # ─── Great: Best move in a critical position where only this move works ───
-    # A "great" move is when you're in a position where the best move is 
-    # significantly better than the second-best (i.e., only move that doesn't worsen).
-    # Since we don't have multipv data here, we approximate:
-    # The move is best + the position was tense + advantage is maintained
+    # ─── Great: best move in a critical (best vs second-best) spot ───
     if is_best and cp_loss <= 5:
-        # Position was critical: either we were slightly worse or close to equal
-        # and this move is the engine's top choice
-        if -150 <= cp_before_pov <= 50 and cp_after_pov >= cp_before_pov - 10:
-            # In tense/defensive positions, the only surviving move is "great"
-            if cp_before_pov < 0:
-                return "great"
+        if critical_gap >= 90:
+            return "great"
+        if cp_before_pov < 0 and critical_gap >= 70 and cp_after_pov >= cp_before_pov - 8:
+            return "great"
 
     # ─── Best: exact engine move ───
     if is_best:
         return "best"
+
+    # Near-top move handling using true PV ranking and delta.
+    if move_rank == 2 and cp_loss <= 20:
+        return "excellent"
+    if move_rank == 3 and cp_loss <= 35:
+        return "good"
 
     # ─── Miss: Player had a chance to exploit opponent's blunder/mistake 
     # but played a different (non-punishing) move ───
@@ -603,14 +720,14 @@ def classify_move(
     wp_after = win_percent_from_cp(cp_after_pov)
     wp_loss = max(0, wp_before - wp_after)
 
-    # CAPS2-inspired grading using win% loss
-    if wp_loss <= 1.0 and cp_loss <= 10:
+    # Multi-PV + win%-aware grading tuned to reduce over-labeling inaccuracies.
+    if wp_loss <= 2.8 and cp_loss <= 30:
         return "excellent"
-    if wp_loss <= 3.0 and cp_loss <= 30:
+    if wp_loss <= 6.0 and cp_loss <= 65:
         return "good"
-    if wp_loss <= 8.0 and cp_loss <= 80:
+    if wp_loss <= 12.0 and cp_loss <= 130:
         return "inaccuracy"
-    if wp_loss <= 18.0 and cp_loss <= 200:
+    if wp_loss <= 24.0 and cp_loss <= 280:
         return "mistake"
     return "blunder"
 
@@ -641,10 +758,10 @@ def move_accuracy_from_category(
         "brilliant": 100.0,
         "great": 100.0,
         "excellent": 96.0,
-        "good": 82.5,
-        "inaccuracy": 45.0,
-        "miss": 15.0,
-        "mistake": 15.0,
+        "good": 85.0,
+        "inaccuracy": 58.0,
+        "miss": 22.0,
+        "mistake": 13.0,
         "blunder": 0.0,
     }
 
@@ -660,7 +777,7 @@ def move_accuracy_from_category(
             wp_after = win_percent_from_cp(cp_after_pov)
             wp_loss = max(0, wp_before - wp_after)
             # Scale penalty based on win% lost (more meaningful than raw cp)
-            score -= min(12.0, wp_loss * 0.8)
+            score -= min(10.0, wp_loss * 0.65)
         else:
             score -= min(12.0, max(0, cp_loss) / 30.0)
 

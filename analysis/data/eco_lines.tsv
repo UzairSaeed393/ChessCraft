@@ -1,0 +1,50 @@
+# eco	opening	moves_uci
+B00	King's Pawn Game	e2e4
+C20	Open Game	e2e4 e7e5
+C40	King's Knight Opening	e2e4 e7e5 g1f3
+C50	Italian Game	e2e4 e7e5 g1f3 b8c6 f1c4
+C60	Ruy Lopez	e2e4 e7e5 g1f3 b8c6 f1b5
+C65	Berlin Defense	e2e4 e7e5 g1f3 b8c6 f1b5 g8f6
+C68	Ruy Lopez Exchange	e2e4 e7e5 g1f3 b8c6 f1b5 a7a6 b5c6
+C78	Ruy Lopez Closed	e2e4 e7e5 g1f3 b8c6 f1b5 a7a6 b5a4 g8f6 e1g1 f8e7
+C44	Scotch Game	e2e4 e7e5 g1f3 b8c6 d2d4
+C30	King's Gambit	e2e4 e7e5 f2f4
+C42	Petrov Defense	e2e4 e7e5 g1f3 g8f6
+C46	Four Knights Game	e2e4 e7e5 g1f3 b8c6 b1c3 g8f6
+C25	Vienna Game	e2e4 e7e5 b1c3
+C41	Philidor Defense	e2e4 e7e5 g1f3 d7d6
+B01	Scandinavian Defense	e2e4 d7d5
+B02	Alekhine Defense	e2e4 g8f6
+B06	Modern Defense	e2e4 g7g6 d2d4 f8g7 b1c3 d7d6
+B07	Pirc Defense	e2e4 d7d6 d2d4 g8f6 b1c3 g7g6
+B10	Caro-Kann Defense	e2e4 c7c6 d2d4 d7d5
+C00	French Defense	e2e4 e7e6 d2d4 d7d5
+B20	Sicilian Defense	e2e4 c7c5
+B23	Sicilian Closed	e2e4 c7c5 b1c3
+B40	Sicilian Kan	e2e4 c7c5 g1f3 e7e6 d2d4 c5d4 f3d4 a7a6
+B50	Sicilian Classical	e2e4 c7c5 g1f3 d7d6 d2d4 c5d4 f3d4 g8f6 b1c3
+B70	Sicilian Dragon	e2e4 c7c5 g1f3 d7d6 d2d4 c5d4 f3d4 g8f6 b1c3 g7g6
+B90	Sicilian Najdorf	e2e4 c7c5 g1f3 d7d6 d2d4 c5d4 f3d4 g8f6 b1c3 a7a6
+B33	Sicilian Sveshnikov	e2e4 c7c5 g1f3 b8c6 d2d4 c5d4 f3d4 g8f6 b1c3 e7e5
+D00	Queen's Pawn Game	d2d4
+D02	Closed Game	d2d4 d7d5
+D06	Queen's Gambit	d2d4 d7d5 c2c4
+D30	Queen's Gambit Declined	d2d4 d7d5 c2c4 e7e6
+D10	Slav Defense	d2d4 d7d5 c2c4 c7c6
+D15	Slav Main Line	d2d4 d7d5 c2c4 c7c6 g1f3 g8f6
+D35	QGD Exchange	d2d4 d7d5 c2c4 e7e6 c4d5 e6d5
+D02	London System	d2d4 d7d5 c1f4
+E60	King's Indian Defense	d2d4 g8f6 c2c4 g7g6 b1c3 f8g7 e2e4 d7d6
+D80	Gruenfeld Defense	d2d4 g8f6 c2c4 g7g6 b1c3 d7d5
+E20	Nimzo-Indian Defense	d2d4 g8f6 c2c4 e7e6 b1c3 f8b4
+E11	Bogo-Indian Defense	d2d4 g8f6 c2c4 e7e6 g1f3 f8b4
+E12	Queen's Indian Defense	d2d4 g8f6 c2c4 e7e6 g1f3 b7b6
+E00	Catalan Opening	d2d4 g8f6 c2c4 e7e6 g2g3
+A10	English Opening	c2c4
+A12	English Symmetrical	c2c4 c7c5
+A04	Reti Opening	g1f3
+A45	Trompowsky Attack	d2d4 g8f6 c1g5
+A80	Dutch Defense	d2d4 f7f5
+A60	Benoni Defense	d2d4 g8f6 c2c4 c7c5 d4d5
+A57	Benko Gambit	d2d4 g8f6 c2c4 c7c5 d4d5 b7b5
+B00	Owen Defense	e2e4 b7b6

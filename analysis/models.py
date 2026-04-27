@@ -9,6 +9,10 @@ class SavedAnalysis(models.Model):
     pgn_data = models.TextField()
     
     full_payload = models.JSONField(null=True, blank=True)
+
+    # Version metadata used for selective re-analysis
+    review_algo_version = models.IntegerField(default=0)
+    analysis_engine_version = models.CharField(max_length=80, blank=True, null=True)
     
     # Overall Stats
     white_accuracy = models.FloatField(default=0.0)
@@ -37,9 +41,11 @@ class SavedAnalysis(models.Model):
     mistake_count = models.IntegerField(default=0)
     blunder_count = models.IntegerField(default=0)
 
-    # Opening info (populated from Lichess API / PGN headers during analysis)
+    # Opening info and confidence/source metadata from local resolver
     opening = models.CharField(max_length=255, blank=True, null=True)
     eco_code = models.CharField(max_length=10, blank=True, null=True)
+    opening_source = models.CharField(max_length=40, blank=True, null=True)
+    opening_confidence = models.FloatField(blank=True, null=True)
     
     result_reason = models.CharField(max_length=255, blank=True, null=True)
 

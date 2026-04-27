@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import json
 from collections import defaultdict
+from typing import Any
 
 import chess
 import chess.pgn
@@ -23,6 +24,7 @@ from .engine import (
     classify_move,
     move_accuracy_from_category,
 )
+from .opening_book import BookHit, OpeningBookResolver
 from .models import MoveAnalysis, SavedAnalysis
 
 
@@ -40,7 +42,7 @@ CATEGORIES = [
 ]
 
 PHASES = ["opening", "middlegame", "endgame"]
-REVIEW_ALGO_VERSION = 9
+REVIEW_ALGO_VERSION = 10
 
 
 def _json_body(request):
@@ -190,6 +192,107 @@ def _is_book_move_heuristic(
     return False
 
 
+def _position_complexity(board: chess.Board) -> dict[str, int | bool]:
+    legal_moves = list(board.legal_moves)
+    captures = 0
+    checks = 0
+    promotions = 0
+
+    for mv in legal_moves:
+        if board.is_capture(mv):
+            captures += 1
+        if board.gives_check(mv):
+            checks += 1
+        if mv.promotion:
+            promotions += 1
+
+    return {
+        "legal_count": len(legal_moves),
+        "captures": captures,
+        "checks": checks,
+        "promotions": promotions,
+        "in_check": board.is_check(),
+    }
+
+
+def _adaptive_depth_for_position(base_depth: int, board: chess.Board, ply_index: int) -> int:
+    min_depth = int(getattr(settings, "ANALYSIS_REVIEW_MIN_DEPTH", 12))
+    max_boost = int(getattr(settings, "ANALYSIS_REVIEW_MAX_DEPTH_BOOST", 3))
+
+    phase = _phase_for_position(board, ply_index)
+    complexity = _position_complexity(board)
+    legal_count = int(complexity["legal_count"])
+    captures = int(complexity["captures"])
+    checks = int(complexity["checks"])
+    promotions = int(complexity["promotions"])
+    in_check = bool(complexity["in_check"])
+
+    forcing_score = captures + checks + promotions + (3 if in_check else 0)
+    depth = base_depth
+
+    # Phase-aware baseline
+    if phase == "opening":
+        depth -= 1
+    elif phase == "endgame":
+        depth += 1
+
+    # Tactical nodes get deeper search.
+    if in_check or forcing_score >= 8 or captures >= 5:
+        depth += min(max_boost, 2)
+    elif forcing_score >= 4:
+        depth += 1
+
+    # Quiet/forced recapture style positions get a shallower pass.
+    if (not in_check) and legal_count <= 10 and captures <= 1 and checks == 0:
+        depth -= 2
+
+    return max(min_depth, min(base_depth + max_boost, depth))
+
+
+def _analyze_positions_with_depth_plan(
+    engine: StockfishManager,
+    fens: list[str],
+    depth_plan: list[int],
+    multipv: int,
+    priority: int,
+) -> list[dict[str, Any]]:
+    if not fens:
+        return []
+
+    grouped_indices: dict[int, list[int]] = defaultdict(list)
+    for idx, depth in enumerate(depth_plan):
+        grouped_indices[int(depth)].append(idx)
+
+    output: list[dict[str, Any] | None] = [None] * len(fens)
+    for depth, indices in grouped_indices.items():
+        subset_fens = [fens[i] for i in indices]
+        subset_results = engine.analyze_batch(
+            subset_fens,
+            depth=depth,
+            multipv=multipv,
+            priority=priority,
+        )
+
+        for local_idx, global_idx in enumerate(indices):
+            if local_idx < len(subset_results):
+                output[global_idx] = subset_results[local_idx]
+
+    fallback_depth = depth_plan[0] if depth_plan else getattr(engine, "default_depth", 16)
+    for idx, item in enumerate(output):
+        if item is None:
+            output[idx] = {
+                "evaluation_cp": 0,
+                "evaluation": 0.0,
+                "best_move": "",
+                "pv": [],
+                "depth": fallback_depth,
+                "mate": None,
+                "lines": [],
+            }
+
+    return [item for item in output if item is not None]
+
+
 def _empty_side_stats():
     return {
         "move_accuracies": [],
@@ -206,22 +309,24 @@ def _parse_pgn_or_raise(pgn_text: str):
     return game
 
 
-def _build_game_review_payload(game_obj, user, priority=0) -> tuple[dict, SavedAnalysis]:
-    engine = StockfishManager()
+def _build_game_review_payload(
+    game_obj,
+    user,
+    priority=0,
+    engine: StockfishManager | None = None,
+    engine_version: str | None = None,
+) -> tuple[dict, SavedAnalysis]:
+    engine = engine or StockfishManager()
+    engine_version = engine_version or engine.get_engine_version()
     parsed_game = _parse_pgn_or_raise(game_obj.pgn or "")
 
-    # Use a deeper search for full game review only.
-    # Live board/position analysis still uses the regular engine default depth.
     review_depth = int(getattr(settings, "ANALYSIS_GAME_REVIEW_DEPTH", 20))
-    review_depth = max(16, review_depth)
+    review_depth = max(int(getattr(settings, "ANALYSIS_REVIEW_MIN_DEPTH", 12)), review_depth)
 
     board = parsed_game.board()
     start_fen = board.fen()
-    eval_history = []
-    moves_payload = []
-    
-    # Try to extract opening from PGN headers first
-    opening_name = parsed_game.headers.get("Opening", "Initial Position")
+    eval_history: list[float] = []
+    moves_payload: list[dict[str, Any]] = []
 
     side_stats = {
         "white": _empty_side_stats(),
@@ -235,63 +340,111 @@ def _build_game_review_payload(game_obj, user, priority=0) -> tuple[dict, SavedA
         user=user,
         game=game_obj,
         pgn_data=game_obj.pgn or "",
+        review_algo_version=REVIEW_ALGO_VERSION,
+        analysis_engine_version=engine_version,
     )
 
     move_rows = []
     mainline_moves = list(parsed_game.mainline_moves())
+    book_resolver = OpeningBookResolver(headers=parsed_game.headers)
 
-    # 1. Collect all FENs for batch processing
     all_fens = [start_fen]
+    all_boards = [parsed_game.board()]
     temp_board = parsed_game.board()
     for move in mainline_moves:
         temp_board.push(move)
         all_fens.append(temp_board.fen())
+        all_boards.append(temp_board.copy())
 
-    # 2. Send all FENs to engine in a single batch request
-    print(f"Batch analyzing {len(all_fens)} positions with priority {priority}...")
-    batch_results = engine.analyze_batch(
-        all_fens,
-        depth=review_depth,
-        multipv=1,
+    adaptive_enabled = bool(getattr(settings, "ANALYSIS_ADAPTIVE_DEPTH", True))
+    if adaptive_enabled:
+        depth_plan = [
+            _adaptive_depth_for_position(review_depth, fen_board, idx + 1)
+            for idx, fen_board in enumerate(all_boards)
+        ]
+    else:
+        depth_plan = [review_depth] * len(all_fens)
+
+    print(
+        f"Batch analyzing {len(all_fens)} positions with priority {priority} "
+        f"(depth range: {min(depth_plan)}-{max(depth_plan)})..."
+    )
+    batch_results = _analyze_positions_with_depth_plan(
+        engine=engine,
+        fens=all_fens,
+        depth_plan=depth_plan,
+        multipv=3,
         priority=priority,
     )
+
+    move_history_uci: list[str] = []
+    strongest_book_hit: BookHit | None = None
 
     for ply_index, move in enumerate(mainline_moves, start=1):
         fen_before = board.fen()
         side = "white" if board.turn else "black"
         phase = _phase_for_position(board, ply_index)
 
-        is_book = False
-
-        # Retrieve cached batch results (0-indexed logic)
-        if ply_index - 1 < len(batch_results):
-            before_eval = batch_results[ply_index - 1]
-            cp_before = int(before_eval.get("evaluation_cp") or 0)
-            best_move_uci = before_eval.get("best_move") or ""
-            best_pv_uci = before_eval.get("pv") or []
-        else:
-            cp_before = 0
-            best_move_uci = ""
-            best_pv_uci = []
-
         move_san = board.san(move)
         move_uci = move.uci()
+
+        before_eval: dict[str, Any] = {
+            "evaluation_cp": 0,
+            "evaluation": 0.0,
+            "best_move": "",
+            "pv": [],
+            "depth": review_depth,
+            "mate": None,
+            "lines": [],
+        }
+        if ply_index - 1 < len(batch_results):
+            before_eval = batch_results[ply_index - 1] or before_eval
+
+        before_lines = [item for item in (before_eval.get("lines") or []) if isinstance(item, dict)]
+        if not before_lines:
+            before_lines = [before_eval]
+
+        top_before = before_lines[0]
+        second_before = before_lines[1] if len(before_lines) > 1 else None
+
+        cp_before = int(top_before.get("evaluation_cp") or before_eval.get("evaluation_cp") or 0)
+        best_move_uci = top_before.get("best_move") or before_eval.get("best_move") or ""
+        best_pv_uci = top_before.get("pv") or before_eval.get("pv") or []
+        second_best_move_uci = (second_before.get("best_move") if second_before else "") or ""
+        second_best_cp = int(second_before.get("evaluation_cp") or 0) if second_before else None
+        second_best_pv = (second_before.get("pv") if second_before else []) or []
+
+        move_rank = None
+        for idx_line, line in enumerate(before_lines, start=1):
+            if (line.get("best_move") or "").strip() == move_uci:
+                move_rank = idx_line
+                break
 
         after_board = board.copy()
         after_board.push(move)
         fen_after = after_board.fen()
 
+        after_eval: dict[str, Any] = {
+            "evaluation_cp": cp_before,
+            "evaluation": round(cp_before / 100.0, 2),
+            "best_move": "",
+            "pv": [],
+            "depth": review_depth,
+            "mate": None,
+            "lines": [],
+        }
         if ply_index < len(batch_results):
-            after_eval = batch_results[ply_index]
-            cp_after = int(after_eval.get("evaluation_cp") or 0)
-            follow_pv_uci = after_eval.get("pv") or []
-            mate_after = after_eval.get("mate")
-        else:
-            cp_after = cp_before
-            follow_pv_uci = []
-            mate_after = None
+            after_eval = batch_results[ply_index] or after_eval
 
-        mate_before = before_eval.get("mate") if ply_index - 1 < len(batch_results) else None
+        after_lines = [item for item in (after_eval.get("lines") or []) if isinstance(item, dict)]
+        if not after_lines:
+            after_lines = [after_eval]
+        top_after = after_lines[0]
+
+        cp_after = int(top_after.get("evaluation_cp") or after_eval.get("evaluation_cp") or cp_before)
+        follow_pv_uci = top_after.get("pv") or after_eval.get("pv") or []
+        mate_before = top_before.get("mate", before_eval.get("mate"))
+        mate_after = top_after.get("mate", after_eval.get("mate"))
 
         if side == "white":
             cp_loss = max(0, cp_before - cp_after)
@@ -302,33 +455,45 @@ def _build_game_review_payload(game_obj, user, priority=0) -> tuple[dict, SavedA
             cp_gain = cp_before - cp_after
             potential_gain = cp_loss
 
-        # Fast local book detection (no external API calls)
-        is_book = _is_book_move_heuristic(
+        book_hit = book_resolver.detect_move(
+            board_before=board,
+            move_uci=move_uci,
+            move_history_uci=move_history_uci,
             ply_index=ply_index,
             cp_loss=cp_loss,
-            move_uci=move_uci,
-            best_move_uci=best_move_uci,
             cp_before=cp_before,
             cp_after=cp_after,
+            best_move_uci=best_move_uci,
+            top_candidate_moves=[line.get("best_move") or "" for line in before_lines[:3]],
         )
+        if book_hit.is_book and (
+            strongest_book_hit is None or book_hit.confidence > strongest_book_hit.confidence
+        ):
+            strongest_book_hit = book_hit
 
         category = classify_move(
             cp_loss=cp_loss,
-
             cp_gain=cp_gain,
             potential_gain=potential_gain,
             move_uci=move_uci,
             best_move_uci=best_move_uci,
             board_before=board,
-            is_book=is_book,
+            second_best_move_uci=second_best_move_uci,
+            second_best_cp=second_best_cp,
+            move_rank=move_rank,
+            best_pv=best_pv_uci,
+            follow_pv=follow_pv_uci,
+            is_book=book_hit.is_book,
             cp_before=cp_before,
             cp_after=cp_after,
             side=side,
             mate_before=mate_before,
             mate_after=mate_after,
+            best_mate=top_before.get("mate"),
+            second_best_mate=(second_before.get("mate") if second_before else None),
         )
 
-        # Book moves don't count towards accuracy loss
+        # Book moves do not count towards accuracy loss.
         if category == "book":
             cp_loss = 0
             cp_gain = 0
@@ -365,8 +530,11 @@ def _build_game_review_payload(game_obj, user, priority=0) -> tuple[dict, SavedA
             cp_loss=cp_loss,
             phase=phase,
         )
+        if category == "book" and book_hit.source not in {"none", "heuristic"}:
+            explanation = f"{move_san} follows {book_hit.source.replace('_', ' ')} opening theory."
 
         best_line_san = _to_san_line(fen_before, best_pv_uci)
+        second_line_san = _to_san_line(fen_before, second_best_pv)
         follow_line_san = _to_san_line(fen_after, follow_pv_uci)
 
         side_stats[side]["move_accuracies"].append(move_accuracy)
@@ -390,9 +558,15 @@ def _build_game_review_payload(game_obj, user, priority=0) -> tuple[dict, SavedA
                 "centipawn_loss": cp_loss,
                 "classification": category,
                 "best_move": best_move_uci,
+                "second_best_move": second_best_move_uci or None,
+                "move_rank": move_rank,
                 "best_move_san": best_san,
                 "best_line": best_line_san,
+                "second_best_line": second_line_san,
                 "follow_line": follow_line_san,
+                "book_source": book_hit.source if category == "book" else None,
+                "book_confidence": book_hit.confidence if category == "book" else None,
+                "engine_depth_used": int(top_before.get("depth") or before_eval.get("depth") or review_depth),
                 "explanation": explanation,
             }
         )
@@ -410,6 +584,7 @@ def _build_game_review_payload(game_obj, user, priority=0) -> tuple[dict, SavedA
         )
 
         eval_history.append(round(cp_after / 100.0, 2))
+        move_history_uci.append(move_uci)
         board.push(move)
 
     if move_rows:
@@ -418,7 +593,6 @@ def _build_game_review_payload(game_obj, user, priority=0) -> tuple[dict, SavedA
     white_accuracy = accuracy_from_move_accuracies(side_stats["white"]["move_accuracies"])
     black_accuracy = accuracy_from_move_accuracies(side_stats["black"]["move_accuracies"])
 
-    # --- Game Result & Termination Logic ---
     headers = parsed_game.headers
     result = headers.get("Result", "*")
     termination = headers.get("Termination", "Normal")
@@ -431,10 +605,8 @@ def _build_game_review_payload(game_obj, user, priority=0) -> tuple[dict, SavedA
     elif result == "0-1":
         winner_name = black_name
 
-    # Refine termination reason
     res_reason = termination
     if termination.lower() == "normal":
-        # Check if it was checkmate
         if board.is_checkmate():
             res_reason = "Checkmate"
         elif board.is_stalemate():
@@ -444,22 +616,19 @@ def _build_game_review_payload(game_obj, user, priority=0) -> tuple[dict, SavedA
         else:
             res_reason = "Normal"
 
-    final_result_text = ""
     if winner_name:
         final_result_text = f"{winner_name} won by {res_reason.lower()}"
+    elif result == "1/2-1/2":
+        final_result_text = f"Draw by {res_reason.lower()}"
     else:
-        if result == "1/2-1/2":
-            final_result_text = f"Draw by {res_reason.lower()}"
-        else:
-            final_result_text = f"Game ended: {result}"
-
-    # Standardize result text for common terms
+        final_result_text = f"Game ended: {result}"
     final_result_text = final_result_text.replace("by time forfeit", "by timeout")
 
     total_counts = defaultdict(int)
     for side in ("white", "black"):
         for name, value in side_stats[side]["counts"].items():
             total_counts[name] += value
+
     phase_accuracy = {
         "white": {
             phase: accuracy_from_move_accuracies(side_stats["white"]["phase"][phase])
@@ -475,23 +644,24 @@ def _build_game_review_payload(game_obj, user, priority=0) -> tuple[dict, SavedA
 
     white_base = game_obj.white_rating or 1200
     black_base = game_obj.black_rating or 1200
-
     white_rating_est = _estimate_rating(white_accuracy, white_base)
     black_rating_est = _estimate_rating(black_accuracy, black_base)
+
+    opening_meta = book_resolver.resolve_opening_metadata(strongest_book_hit)
+    book_resolver.close()
+    opening_name = opening_meta.get("opening") or parsed_game.headers.get("Opening") or "Initial Position"
+    eco_code = opening_meta.get("eco_code") or parsed_game.headers.get("ECO")
 
     analysis_record.white_accuracy = white_accuracy
     analysis_record.black_accuracy = black_accuracy
     analysis_record.white_rating_est = white_rating_est
     analysis_record.black_rating_est = black_rating_est
-    
-    # Save accurately calculated phase data
     analysis_record.white_opening_acc = phase_accuracy["white"].get("opening")
     analysis_record.white_mid_acc = phase_accuracy["white"].get("middlegame")
     analysis_record.white_end_acc = phase_accuracy["white"].get("endgame")
     analysis_record.black_opening_acc = phase_accuracy["black"].get("opening")
     analysis_record.black_mid_acc = phase_accuracy["black"].get("middlegame")
     analysis_record.black_end_acc = phase_accuracy["black"].get("endgame")
-
     analysis_record.brilliant_count = int(total_counts["brilliant"])
     analysis_record.great_count = int(total_counts["great"])
     analysis_record.best_count = int(total_counts["best"])
@@ -503,14 +673,14 @@ def _build_game_review_payload(game_obj, user, priority=0) -> tuple[dict, SavedA
     analysis_record.mistake_count = int(total_counts["mistake"])
     analysis_record.blunder_count = int(total_counts["blunder"])
     analysis_record.result_reason = res_reason or "Normal"
-    
-    # Save opening info discovered during analysis
-    eco_from_pgn = parsed_game.headers.get("ECO", None)
     analysis_record.opening = opening_name if opening_name != "Initial Position" else None
-    analysis_record.eco_code = eco_from_pgn
+    analysis_record.eco_code = eco_code
+    analysis_record.opening_source = opening_meta.get("opening_source")
+    analysis_record.opening_confidence = opening_meta.get("opening_confidence")
+    analysis_record.review_algo_version = REVIEW_ALGO_VERSION
+    analysis_record.analysis_engine_version = engine_version
     analysis_record.save()
 
-    # Identify user side and save accuracy to Game model
     username_guess = (game_obj.chess_username_at_time or user.chess_username or user.username or "").lower()
     user_side = "white"
     user_acc = white_accuracy
@@ -523,7 +693,7 @@ def _build_game_review_payload(game_obj, user, priority=0) -> tuple[dict, SavedA
 
     game_obj.accuracy = user_acc
     game_obj.is_analyzed = True
-    game_obj.save(update_fields=['accuracy', 'is_analyzed'])
+    game_obj.save(update_fields=["accuracy", "is_analyzed"])
 
     summary = {
         "players": {
@@ -551,11 +721,15 @@ def _build_game_review_payload(game_obj, user, priority=0) -> tuple[dict, SavedA
         "phase_accuracy": phase_accuracy,
         "total_accuracy": round((white_accuracy + black_accuracy) / 2.0, 1),
         "opening_name": opening_name,
+        "opening_source": analysis_record.opening_source,
+        "opening_confidence": analysis_record.opening_confidence,
         "result_text": final_result_text,
     }
 
     payload = {
         "algo_version": REVIEW_ALGO_VERSION,
+        "review_algo_version": REVIEW_ALGO_VERSION,
+        "analysis_engine_version": engine_version,
         "analysis_id": analysis_record.id,
         "game": {
             "id": game_obj.id,
@@ -571,10 +745,10 @@ def _build_game_review_payload(game_obj, user, priority=0) -> tuple[dict, SavedA
         "summary": summary,
         "moves": moves_payload,
     }
-    
+
     analysis_record.full_payload = payload
     analysis_record.save(update_fields=["full_payload"])
-    
+
     return payload, analysis_record
 
 
@@ -633,17 +807,41 @@ def run_full_game_review(request):
     if not game_obj.pgn:
         return JsonResponse({"error": "This game has no PGN to analyze"}, status=400)
 
-    # Check if we already have a saved full payload
+    manager = StockfishManager()
+    current_engine_version = manager.get_engine_version()
+
+    # Reuse cache only when both review algo and engine version are still aligned.
     existing_record = SavedAnalysis.objects.filter(user=request.user, game=game_obj).order_by("-id").first()
-    if (
-        existing_record
-        and existing_record.full_payload
-        and existing_record.full_payload.get("algo_version") == REVIEW_ALGO_VERSION
-    ):
-        return JsonResponse({"status": "success", **existing_record.full_payload})
+    if existing_record and existing_record.full_payload:
+        payload_versions = existing_record.full_payload
+        saved_algo_version = (
+            existing_record.review_algo_version
+            or payload_versions.get("review_algo_version")
+            or payload_versions.get("algo_version")
+            or 0
+        )
+        saved_engine_version = (
+            existing_record.analysis_engine_version
+            or payload_versions.get("analysis_engine_version")
+            or ""
+        )
+
+        try:
+            saved_algo_version_int = int(saved_algo_version)
+        except (TypeError, ValueError):
+            saved_algo_version_int = 0
+
+        if saved_algo_version_int == REVIEW_ALGO_VERSION and str(saved_engine_version) == str(current_engine_version):
+            return JsonResponse({"status": "success", **existing_record.full_payload})
 
     # Priority 0: Manual user-initiated review gets top priority in the queue
-    payload, _record = _build_game_review_payload(game_obj, request.user, priority=0)
+    payload, _record = _build_game_review_payload(
+        game_obj,
+        request.user,
+        priority=0,
+        engine=manager,
+        engine_version=current_engine_version,
+    )
     return JsonResponse({"status": "success", **payload})
 
 
@@ -731,11 +929,22 @@ def analyze_variation(request):
         manager = StockfishManager()
         side = "white" if board.turn else "black"
 
-        before_eval = manager.get_analysis(fen, multipv=1, priority=0)
+        before_lines = manager.get_analysis_multipv(fen, multipv=3, priority=0)
+        before_eval = before_lines[0] if before_lines else {}
+        second_eval = before_lines[1] if len(before_lines) > 1 else {}
+
         cp_before = int(before_eval.get("evaluation_cp") or 0)
         mate_before = before_eval.get("mate")
         best_move_uci = before_eval.get("best_move") or ""
         best_line = _to_san_line(fen, before_eval.get("pv") or [])
+        second_best_move_uci = second_eval.get("best_move") or ""
+        second_best_cp = int(second_eval.get("evaluation_cp") or 0) if second_eval else None
+
+        move_rank = None
+        for idx, line in enumerate(before_lines, start=1):
+            if (line.get("best_move") or "") == move_uci:
+                move_rank = idx
+                break
 
         board.push(move)
         after_fen = board.fen()
@@ -761,11 +970,18 @@ def analyze_variation(request):
             move_uci=move_uci,
             best_move_uci=best_move_uci,
             board_before=chess.Board(fen),
+            second_best_move_uci=second_best_move_uci,
+            second_best_cp=second_best_cp,
+            move_rank=move_rank,
+            best_pv=before_eval.get("pv") or [],
+            follow_pv=after_eval.get("pv") or [],
             cp_before=cp_before,
             cp_after=cp_after,
             side=side,
             mate_before=mate_before,
             mate_after=mate_after,
+            best_mate=before_eval.get("mate"),
+            second_best_mate=second_eval.get("mate") if second_eval else None,
         )
 
         best_san = "(none)"
@@ -852,6 +1068,8 @@ def latest_saved_review(request, game_id: int):
         {
             "status": "success",
             "analysis_id": record.id,
+            "review_algo_version": record.review_algo_version,
+            "analysis_engine_version": record.analysis_engine_version,
             "white_accuracy": record.white_accuracy,
             "black_accuracy": record.black_accuracy,
             "white_rating_est": record.white_rating_est,
