@@ -348,6 +348,14 @@ def _build_game_review_payload(
     mainline_moves = list(parsed_game.mainline_moves())
     book_resolver = OpeningBookResolver(headers=parsed_game.headers)
 
+    # Remote engine needs conservative defaults to avoid queue timeout on long games.
+    if engine.mode == "remote":
+        remote_max_depth = int(getattr(settings, "ANALYSIS_REVIEW_REMOTE_MAX_DEPTH", 14))
+        longgame_depth = int(getattr(settings, "ANALYSIS_REVIEW_REMOTE_LONGGAME_DEPTH", 12))
+        review_depth = min(review_depth, remote_max_depth)
+        if len(mainline_moves) >= 120:
+            review_depth = min(review_depth, longgame_depth)
+
     all_fens = [start_fen]
     all_boards = [parsed_game.board()]
     temp_board = parsed_game.board()
@@ -360,8 +368,13 @@ def _build_game_review_payload(
     if engine.mode == "remote":
         adaptive_enabled = bool(getattr(settings, "ANALYSIS_ADAPTIVE_DEPTH_REMOTE", False))
 
-    review_multipv = int(getattr(settings, "ANALYSIS_REVIEW_MULTIPV", 3 if engine.mode != "remote" else 2))
+    review_multipv = int(getattr(settings, "ANALYSIS_REVIEW_MULTIPV", 3 if engine.mode != "remote" else 1))
     review_multipv = max(1, min(3, review_multipv))
+    if engine.mode == "remote":
+        review_multipv = max(
+            1,
+            min(3, int(getattr(settings, "ANALYSIS_REVIEW_REMOTE_MULTIPV", review_multipv))),
+        )
     if engine.mode == "remote" and review_multipv > 1 and not engine.supports_batch_multipv():
         review_multipv = 1
 
@@ -818,7 +831,7 @@ def run_full_game_review(request):
     manager = StockfishManager()
     current_engine_version = manager.get_engine_version()
 
-    # Reuse cache only when both review algo and engine version are still aligned.
+    # Reuse cache when review algo matches; optionally require strict engine-version match.
     existing_record = SavedAnalysis.objects.filter(user=request.user, game=game_obj).order_by("-id").first()
     if existing_record and existing_record.full_payload:
         payload_versions = existing_record.full_payload
@@ -839,8 +852,18 @@ def run_full_game_review(request):
         except (TypeError, ValueError):
             saved_algo_version_int = 0
 
-        if saved_algo_version_int == REVIEW_ALGO_VERSION and str(saved_engine_version) == str(current_engine_version):
-            return JsonResponse({"status": "success", **existing_record.full_payload})
+        strict_engine_cache = bool(getattr(settings, "ANALYSIS_STRICT_ENGINE_VERSION_CACHE", False))
+        if saved_algo_version_int == REVIEW_ALGO_VERSION:
+            if not strict_engine_cache:
+                return JsonResponse({"status": "success", **existing_record.full_payload})
+
+            same_engine = str(saved_engine_version) == str(current_engine_version)
+            unknown_engine = (
+                "unknown" in str(saved_engine_version).lower()
+                or "unknown" in str(current_engine_version).lower()
+            )
+            if same_engine or unknown_engine:
+                return JsonResponse({"status": "success", **existing_record.full_payload})
 
     # Priority 0: Manual user-initiated review gets top priority in the queue
     try:
