@@ -211,10 +211,8 @@
         const pText = document.querySelector('.pbar-text');
         if (pText) pText.textContent = "Connecting to engine...";
 
-        const btnSyncRecent = byId('btnSyncRecent');
-        const btnSyncMonth = byId('btnSyncMonth');
-        if (btnSyncRecent) btnSyncRecent.disabled = true;
-        if (btnSyncMonth) btnSyncMonth.disabled = true;
+        const btnSyncNext = byId('btnSyncNext');
+        if (btnSyncNext) btnSyncNext.disabled = true;
 
         fetch('/analysis/api/analyze-period/', {
             method: 'POST',
@@ -222,14 +220,13 @@
                 'Content-Type': 'application/json',
                 'X-CSRFToken': getCSRF()
             },
-            body: JSON.stringify({ username: activeUsername, period: period })
+            body: JSON.stringify({ username: activeUsername })
         })
         .then(r => r.json())
         .then(res => {
             isAnalyzing = false;
             hide('analysisProgress');
-            if (btnSyncRecent) btnSyncRecent.disabled = false;
-            if (btnSyncMonth) btnSyncMonth.disabled = false;
+            if (btnSyncNext) btnSyncNext.disabled = false;
 
             if (res.status === 'complete' || res.status === 'success') {
                 const count = res.games_processed || res.processed_count || 0;
@@ -243,16 +240,13 @@
         .catch(err => {
             isAnalyzing = false;
             hide('analysisProgress');
-            if (btnSyncRecent) btnSyncRecent.disabled = false;
-            if (btnSyncMonth) btnSyncMonth.disabled = false;
+            if (btnSyncNext) btnSyncNext.disabled = false;
             alert("Error running analysis batch.");
         });
     }
 
-    const btnSyncRecent = byId('btnSyncRecent');
-    const btnSyncMonth = byId('btnSyncMonth');
-    if (btnSyncRecent) btnSyncRecent.addEventListener('click', () => runAnalysisBatch('week'));
-    if (btnSyncMonth) btnSyncMonth.addEventListener('click', () => runAnalysisBatch('month'));
+    const btnSyncNext = byId('btnSyncNext');
+    if (btnSyncNext) btnSyncNext.addEventListener('click', () => runAnalysisBatch('next'));
 
     // ── Summary ────────────────────────────────────────────
     function renderSummary(d) {
@@ -497,13 +491,16 @@
             const wPct = ((row.wins / total) * 100).toFixed(0);
             const dPct = ((row.draws / total) * 100).toFixed(0);
             const lPct = ((row.losses / total) * 100).toFixed(0);
-            const gameUrl = `/user/game/?username=${encodeURIComponent(activeUsername)}&opening=${encodeURIComponent(row.opening)}`;
+            const isOther = Boolean(row.is_other);
+            const gameUrl = isOther ? '' : `/user/game/?username=${encodeURIComponent(activeUsername)}&opening=${encodeURIComponent(row.opening)}`;
+            const clickableAttrs = isOther ? '' : `onclick="window.location.href='${gameUrl}'" title="View games with this opening"`;
+            const label = isOther ? 'Other openings' : row.opening;
 
             html += `
-                <div class="opening-card" onclick="window.location.href='${gameUrl}'" title="View games with this opening">
+                <div class="opening-card ${isOther ? 'opening-card-muted' : ''}" ${clickableAttrs}>
                     <div class="oc-header">
                         <span class="oc-rank">${i + 1}</span>
-                        <span class="oc-name">${row.opening}</span>
+                        <span class="oc-name">${label}</span>
                         <span class="oc-games">${row.games} game${row.games > 1 ? 's' : ''}</span>
                     </div>
                     <div class="oc-bar-row">

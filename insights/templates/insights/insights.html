@@ -44,11 +44,8 @@
     <div class="analysis-controls mb-4">
         <div class="controls-row">
             <div class="sync-group">
-                <button id="btnSyncRecent" class="sync-btn" title="Analyze up to 20 un-analyzed games from the last 7 days">
-                    <i class="bi bi-lightning-charge-fill"></i> Analyze More Games (Week)
-                </button>
-                <button id="btnSyncMonth" class="sync-btn secondary" title="Analyze un-analyzed games from this month">
-                    <i class="bi bi-calendar-check-fill"></i> Analyze More Games (Month)
+                <button id="btnSyncNext" class="sync-btn" title="Analyze the next un-analyzed games in queue">
+                    <i class="bi bi-lightning-charge-fill"></i> Analyze Next Games
                 </button>
             </div>
             <div id="serverStatus" class="server-status">
@@ -61,7 +58,7 @@
             <div class="analysis-pbar-track">
                 <div class="analysis-pbar-fill"></div>
             </div>
-            <span class="pbar-text">Processing batch...</span>
+            <span class="pbar-text">Processing next batch...</span>
         </div>
     </div>
 

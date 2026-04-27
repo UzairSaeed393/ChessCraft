@@ -32,7 +32,7 @@ ANALYSIS_ENGINE_MODE = env('ANALYSIS_ENGINE_MODE', default='local')
 ANALYSIS_ENGINE_URL = env('ANALYSIS_ENGINE_URL', default='')
 ANALYSIS_ENGINE_TOKEN = env('ANALYSIS_ENGINE_TOKEN', default='')
 # Full game review depth (batch review only). Live/single-position endpoints still use ANALYSIS_ENGINE_DEPTH.
-ANALYSIS_GAME_REVIEW_DEPTH = env.int('ANALYSIS_GAME_REVIEW_DEPTH', default=14)
+ANALYSIS_GAME_REVIEW_DEPTH = env.int('ANALYSIS_GAME_REVIEW_DEPTH', default=16)
 STOCKFISH_PATH = env('STOCKFISH_PATH', default='')
 ANALYSIS_POLYGLOT_PATH = env('ANALYSIS_POLYGLOT_PATH', default='')
 ANALYSIS_ECO_DB_PATH = env('ANALYSIS_ECO_DB_PATH', default=str(BASE_DIR / 'analysis' / 'data' / 'eco_lines.tsv'))

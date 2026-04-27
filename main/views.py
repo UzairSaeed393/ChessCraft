@@ -77,13 +77,17 @@ def play_vs_ai(request):
     elif elo <= 1200:
         depth = 5
     elif elo <= 1600:
-        depth = 7
+        depth = 6
+    elif elo <= 1800:
+        depth = 8
     elif elo <= 2000:
         depth = 9
     elif elo <= 2500:
         depth = 11
-    else:
+    elif elo <= 2800:
         depth = 13
+    else:
+        depth = 14
     
     manager = StockfishManager()
     

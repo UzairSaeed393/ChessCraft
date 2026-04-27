@@ -1,10 +1,44 @@
 import requests
 import chess.pgn
 import io
+import re
 from datetime import datetime, timedelta, timezone as dt_timezone
 from django.db import IntegrityError
 from django.utils import timezone
 from .models import Game
+
+
+_TIME_CONTROL_RE = re.compile(r"^(?P<base>\d+)(?:\+(?P<inc>\d+))?$")
+
+
+def time_control_category(value: object) -> str:
+    """Return Bullet, Blitz, Rapid, or Other for Chess.com-style time controls."""
+    if value is None:
+        return ""
+
+    raw = str(value).strip()
+    if not raw or raw.upper() == "N/A" or "/" in raw:
+        return ""
+
+    match = _TIME_CONTROL_RE.match(raw)
+    if not match:
+        return ""
+
+    base_seconds = int(match.group("base"))
+    increment_seconds = int(match.group("inc") or 0)
+    estimated_seconds = base_seconds + (40 * increment_seconds)
+
+    if estimated_seconds < 180:
+        return "Bullet"
+    if 180 <= estimated_seconds < 600:
+        return "Blitz"
+    if 600 <= estimated_seconds <= 1800:
+        return "Rapid"
+    return "Other"
+
+
+def is_bullet_time_control(value: object) -> bool:
+    return time_control_category(value) == "Bullet"
 
 
 def _extract_opening(pgn_text: str) -> str | None:
@@ -74,10 +108,12 @@ def fetch_and_save_games(user, chess_username, date_range):
     now = timezone.now()
     if date_range == 'week':
         limit_date = now - timedelta(days=7)
-    elif date_range == '30':
+    elif date_range in {'30', 'month'}:
         limit_date = now - timedelta(days=30)
-    else:
+    elif date_range == '60':
         limit_date = now - timedelta(days=60)
+    else:
+        limit_date = now - timedelta(days=30)
 
     target_archives = _target_archives_for_limit(archives, limit_date)
 

@@ -13,6 +13,7 @@ from django.views.decorators.cache import never_cache
 
 from analysis.models import SavedAnalysis
 from user.models import Game
+from user.utils import is_bullet_time_control
 
 def api_error_handler(view_func):
     """
@@ -34,16 +35,13 @@ def api_error_handler(view_func):
     return _wrapped_view
 
 def _get_analyses(request, username: str):
-    """Return SavedAnalysis queryset for a username, preventing duplicates."""
+    """Return SavedAnalysis rows for a username, excluding bullet games."""
     latest_ids = SavedAnalysis.objects.filter(
         user=request.user, game__chess_username_at_time__iexact=username
     ).values('game').annotate(max_id=Max('id')).values_list('max_id', flat=True)
 
-    return SavedAnalysis.objects.filter(
-        id__in=latest_ids
-    ).exclude(
-        game__time_control__in=['60', '60+1', '60+2', '30', '120', '120+1']
-    ).select_related('game')
+    analyses = list(SavedAnalysis.objects.filter(id__in=latest_ids).select_related('game'))
+    return [analysis for analysis in analyses if not is_bullet_time_control(getattr(analysis.game, 'time_control', None))]
 
 
 def _opening_from_pgn(pgn_text: str) -> str | None:
@@ -173,9 +171,10 @@ def api_summary(request):
     total_games = len(combined_accs)
     
     # Win/Loss logic (Already exists in your queryset, but let's sync withGame model)
-    games_qs = Game.objects.filter(user=request.user, chess_username_at_time__iexact=username).exclude(
-        time_control__in=['60', '60+1', '60+2', '30', '120', '120+1']
-    )
+    games_qs = [
+        game for game in Game.objects.filter(user=request.user, chess_username_at_time__iexact=username)
+        if not is_bullet_time_control(game.time_control)
+    ]
     
     white_wins = white_draws = white_losses = 0
     black_wins = black_draws = black_losses = 0
@@ -259,7 +258,7 @@ def api_trend(request):
     if not username:
         return JsonResponse({'error': 'username required'}, status=400)
 
-    analyses = _get_analyses(request, username).order_by('game_date')
+    analyses = sorted(_get_analyses(request, username), key=lambda analysis: analysis.game_date)
     data = []
     for a in analyses:
         # Use null-safe accuracy calculation
@@ -326,9 +325,10 @@ def api_openings(request):
     if not username:
         return JsonResponse({'error': 'username required'}, status=400)
 
-    games_qs = Game.objects.filter(user=request.user, chess_username_at_time__iexact=username).exclude(
-        time_control__in=['60', '60+1', '60+2', '30', '120', '120+1']
-    )
+    games_qs = [
+        game for game in Game.objects.filter(user=request.user, chess_username_at_time__iexact=username)
+        if not is_bullet_time_control(game.time_control)
+    ]
     opening_stats = defaultdict(lambda: {'games': 0, 'wins': 0, 'draws': 0, 'losses': 0, 'game_ids': []})
     player_lower = username.lower()
 
@@ -349,7 +349,8 @@ def api_openings(request):
         elif result == 'Loss': st['losses'] += 1
         else: st['draws'] += 1
 
-    sorted_openings = sorted(opening_stats.items(), key=lambda x: x[1]['games'], reverse=True)[:10]
+    sorted_openings = sorted(opening_stats.items(), key=lambda x: x[1]['games'], reverse=True)
+
     result_list = []
     for name, st in sorted_openings:
         total = st['games']

@@ -17,6 +17,7 @@ from datetime import timedelta
 from ChessCraft.utils import api_error_handler
 
 from user.models import Game
+from user.utils import is_bullet_time_control
 
 from .engine import (
     StockfishManager,
@@ -216,7 +217,7 @@ def _position_complexity(board: chess.Board) -> dict[str, int | bool]:
 
 
 def _adaptive_depth_for_position(base_depth: int, board: chess.Board, ply_index: int) -> int:
-    min_depth = int(getattr(settings, "ANALYSIS_REVIEW_MIN_DEPTH", 12))
+    min_depth = int(getattr(settings, "ANALYSIS_REVIEW_MIN_DEPTH", 14))
     max_boost = int(getattr(settings, "ANALYSIS_REVIEW_MAX_DEPTH_BOOST", 3))
 
     phase = _phase_for_position(board, ply_index)
@@ -1145,38 +1146,30 @@ def latest_saved_review(request, game_id: int):
 @api_error_handler
 def api_analyze_period(request):
     """
-    Finds and analyzes up to 20 un-analyzed games for a period (week/month).
+    Finds and analyzes the next batch of un-analyzed games across the whole account.
     Uses server health check to decide batch size.
     """
     data = _json_body(request)
-    period = data.get("period", "week")  # week or month
     chess_username = data.get("username", "").strip()
 
     if not chess_username:
         return JsonResponse({"error": "No chess username provided"}, status=400)
-
-    now = timezone.now()
-    if period == "month":
-        start_date = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    else:
-        # Default: current week
-        start_date = now - timedelta(days=7)
 
     # 1. Find un-analyzed games
     games_to_analyze = Game.objects.filter(
         user=request.user,
         chess_username_at_time__iexact=chess_username,
         is_analyzed=False,
-        date_played__gte=start_date
-    ).order_by("-date_played")
+    ).order_by("date_played")
 
-    # Exclude bullet time controls from bulk analysis here to match Insights behavior
-    games_to_analyze = games_to_analyze.exclude(
-        time_control__in=['60', '60+1', '60+2', '30', '120', '120+1']
-    )
+    # Keep the same time-control logic as Insights, which excludes bullet games.
+    games_to_analyze = [
+        game for game in games_to_analyze
+        if not is_bullet_time_control(game.time_control)
+    ]
 
-    if not games_to_analyze.exists():
-        return JsonResponse({"status": "no_games", "message": "All games in this period are already analyzed."})
+    if not games_to_analyze:
+        return JsonResponse({"status": "no_games", "message": "All unanalyzed games are already processed."})
 
     # 2. Check Server Health to decide limit
     manager = StockfishManager()
