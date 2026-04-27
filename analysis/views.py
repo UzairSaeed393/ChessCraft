@@ -357,6 +357,14 @@ def _build_game_review_payload(
         all_boards.append(temp_board.copy())
 
     adaptive_enabled = bool(getattr(settings, "ANALYSIS_ADAPTIVE_DEPTH", True))
+    if engine.mode == "remote":
+        adaptive_enabled = bool(getattr(settings, "ANALYSIS_ADAPTIVE_DEPTH_REMOTE", False))
+
+    review_multipv = int(getattr(settings, "ANALYSIS_REVIEW_MULTIPV", 3 if engine.mode != "remote" else 2))
+    review_multipv = max(1, min(3, review_multipv))
+    if engine.mode == "remote" and review_multipv > 1 and not engine.supports_batch_multipv():
+        review_multipv = 1
+
     if adaptive_enabled:
         depth_plan = [
             _adaptive_depth_for_position(review_depth, fen_board, idx + 1)
@@ -367,13 +375,13 @@ def _build_game_review_payload(
 
     print(
         f"Batch analyzing {len(all_fens)} positions with priority {priority} "
-        f"(depth range: {min(depth_plan)}-{max(depth_plan)})..."
+        f"(depth range: {min(depth_plan)}-{max(depth_plan)}, multipv={review_multipv})..."
     )
     batch_results = _analyze_positions_with_depth_plan(
         engine=engine,
         fens=all_fens,
         depth_plan=depth_plan,
-        multipv=3,
+        multipv=review_multipv,
         priority=priority,
     )
 
@@ -835,14 +843,32 @@ def run_full_game_review(request):
             return JsonResponse({"status": "success", **existing_record.full_payload})
 
     # Priority 0: Manual user-initiated review gets top priority in the queue
-    payload, _record = _build_game_review_payload(
-        game_obj,
-        request.user,
-        priority=0,
-        engine=manager,
-        engine_version=current_engine_version,
-    )
-    return JsonResponse({"status": "success", **payload})
+    try:
+        payload, _record = _build_game_review_payload(
+            game_obj,
+            request.user,
+            priority=0,
+            engine=manager,
+            engine_version=current_engine_version,
+        )
+        return JsonResponse({"status": "success", **payload})
+    except Exception as exc:
+        msg = str(exc)
+        if "timed out" in msg.lower() or "timeout" in msg.lower():
+            return JsonResponse(
+                {
+                    "error": "Analysis engine timeout. The server is busy; please retry in 30-60 seconds.",
+                    "details": msg,
+                },
+                status=504,
+            )
+        return JsonResponse(
+            {
+                "error": "Game analysis failed. Please retry.",
+                "details": msg,
+            },
+            status=502,
+        )
 
 
 @login_required

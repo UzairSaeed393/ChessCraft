@@ -73,6 +73,8 @@ class StockfishManager:
         self.remote_url = getattr(settings, "ANALYSIS_ENGINE_URL", "").strip()
         self.remote_token = getattr(settings, "ANALYSIS_ENGINE_TOKEN", "").strip()
         self.remote_timeout = int(getattr(settings, "ANALYSIS_ENGINE_TIMEOUT", 25))
+        self.remote_batch_timeout = int(getattr(settings, "ANALYSIS_ENGINE_BATCH_TIMEOUT", 90))
+        self._remote_batch_multipv_supported: bool | None = None
 
         explicit_mode = getattr(settings, "ANALYSIS_ENGINE_MODE", "").strip().lower()
         if explicit_mode in {"remote", "local"}:
@@ -126,6 +128,28 @@ class StockfishManager:
         local_bin = os.path.basename(self.local_path) if self.local_path else "stockfish"
         return f"local:{local_bin}"
 
+    def supports_batch_multipv(self) -> bool:
+        """Detect whether remote batch API returns per-position multi-PV lines."""
+        if self.mode != "remote":
+            return True
+
+        if self._remote_batch_multipv_supported is not None:
+            return self._remote_batch_multipv_supported
+
+        force_setting = getattr(settings, "ANALYSIS_REMOTE_BATCH_MULTIPV", None)
+        if force_setting is not None:
+            self._remote_batch_multipv_supported = bool(force_setting)
+            return self._remote_batch_multipv_supported
+
+        health = self.get_health()
+        if "supports_batch_lines" in health:
+            self._remote_batch_multipv_supported = bool(health.get("supports_batch_lines"))
+            return self._remote_batch_multipv_supported
+
+        version = str(health.get("engine_version") or "").lower()
+        self._remote_batch_multipv_supported = ("multipv" in version) or ("v4" in version)
+        return self._remote_batch_multipv_supported
+
     def get_analysis(self, fen: str, depth: int | None = None, multipv: int = 1, elo_limit: int | None = None, priority: int = 1) -> dict[str, Any]:
         """Return a normalized engine payload for UI and review pipelines."""
         if not fen:
@@ -149,11 +173,16 @@ class StockfishManager:
 
     def analyze_batch(self, fens: list[str], depth: int | None = None, multipv: int = 1, priority: int = 1) -> list[dict[str, Any]]:
         target_depth = depth or self.default_depth
+        requested_multipv = max(1, multipv)
+
+        if self.mode == "remote" and requested_multipv > 1 and not self.supports_batch_multipv():
+            # Older remote services do not return batch "lines"; keep a fast single-pass batch.
+            requested_multipv = 1
 
         if self.mode == "remote":
-            line_sets = self._analyze_batch_remote(fens, target_depth, multipv, priority=priority)
+            line_sets = self._analyze_batch_remote(fens, target_depth, requested_multipv, priority=priority)
         else:
-            line_sets = self._analyze_batch_local(fens, target_depth, multipv)
+            line_sets = self._analyze_batch_local(fens, target_depth, requested_multipv)
 
         output = []
         for lines in line_sets:
@@ -399,7 +428,7 @@ class StockfishManager:
             batch_url,
             json={"fens": fens, "depth": depth, "multipv": multipv},
             headers=headers,
-            timeout=180,
+            timeout=self.remote_batch_timeout,
         )
         response.raise_for_status()
 
@@ -426,28 +455,36 @@ class StockfishManager:
             if multipv > 1:
                 missing_multipv_indices.append(idx)
 
-        # Compatibility fallback for older remote batch servers that only return top line.
+        # Optional compatibility fallback for older remote batch servers that only return top line.
         if multipv > 1 and missing_multipv_indices:
-            for idx in missing_multipv_indices:
-                try:
-                    output[idx] = self._analyze_remote_multipv(
-                        fen=fens[idx],
-                        depth=depth,
-                        multipv=multipv,
-                        priority=priority,
-                    )
-                except Exception:
-                    if not output[idx]:
-                        output[idx] = [
-                            EngineResult(
-                                cp=0,
-                                evaluation=0.0,
-                                best_move="",
-                                pv=[],
-                                depth=depth,
-                                mate=None,
-                            )
-                        ]
+            allow_fallback = bool(
+                getattr(settings, "ANALYSIS_REMOTE_PER_POSITION_MULTIPV_FALLBACK", False)
+            )
+            fallback_max = int(
+                getattr(settings, "ANALYSIS_REMOTE_PER_POSITION_MULTIPV_FALLBACK_MAX", 6)
+            )
+
+            if allow_fallback and len(missing_multipv_indices) <= max(0, fallback_max):
+                for idx in missing_multipv_indices:
+                    try:
+                        output[idx] = self._analyze_remote_multipv(
+                            fen=fens[idx],
+                            depth=depth,
+                            multipv=multipv,
+                            priority=priority,
+                        )
+                    except Exception:
+                        if not output[idx]:
+                            output[idx] = [
+                                EngineResult(
+                                    cp=0,
+                                    evaluation=0.0,
+                                    best_move="",
+                                    pv=[],
+                                    depth=depth,
+                                    mate=None,
+                                )
+                            ]
         return output
 
     def _analyze_batch_local(self, fens: list[str], depth: int, multipv: int) -> list[list[EngineResult]]:
